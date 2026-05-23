@@ -15,7 +15,7 @@ function enhanceMobilePopup(){
     if(popup.dataset.mobileReady === '1') return;
     popup.dataset.mobileReady = '1';
 
-    document.body.classList.add('sheet-open');
+    // document.body.classList.add('sheet-open');
 
     if(!popup.querySelector('.sheetHandle')){
       const handle = document.createElement('div');
@@ -46,7 +46,7 @@ function enhanceMobilePopup(){
 
     if(closeBtn){
       closeBtn.addEventListener('click', ()=>{
-        document.body.classList.remove('sheet-open');
+        // document.body.classList.remove('sheet-open');
       });
     }
 
@@ -550,6 +550,47 @@ color:#fff;
   to{
     transform:translateY(0);
     opacity:1;
+  }
+}
+
+
+/* ===== MOBILE SIDEBAR SCROLL FIX ===== */
+@media (max-width:768px){
+
+  #sidebar{
+    height:100dvh !important;
+    max-height:100dvh !important;
+    overflow-y:auto !important;
+    overflow-x:hidden !important;
+    -webkit-overflow-scrolling:touch !important;
+    padding-bottom:180px !important;
+    box-sizing:border-box !important;
+  }
+
+  .resultBox,
+  .resultbox,
+  #resultBox,
+  #resultList{
+    height:auto !important;
+    max-height:none !important;
+    overflow:visible !important;
+    padding-bottom:180px !important;
+  }
+
+  .itemCard,
+  .resultItem,
+  .listItem{
+    scroll-margin-bottom:160px !important;
+  }
+
+  body.sheet-open #sidebar{
+    transform:none !important;
+    opacity:1 !important;
+    pointer-events:auto !important;
+  }
+
+  .mapTopHud{
+    z-index:20 !important;
   }
 }
 
