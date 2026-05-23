@@ -1382,10 +1382,15 @@ function resetDistanceObjects(){
 
 function exitDistanceMode(message){
   distanceMode = false;
-try{document.getElementById('distanceBtn').textContent='거리재기';}catch(e){}
-  document.getElementById('distanceBtn').classList.remove('active');
-  document.getElementById('distanceBox').classList.add('show');
-  document.getElementById('distanceBox').textContent = message || '거리재기 OFF';
+  try{document.getElementById('distanceBtn').textContent='거리재기';}catch(e){}
+  const btn = document.getElementById('distanceBtn');
+  if(btn) btn.classList.remove('active');
+
+  const box = document.getElementById('distanceBox');
+  if(box){
+    box.classList.remove('show');
+    box.textContent = '';
+  }
 }
 
 function drawDistance(){
@@ -1478,7 +1483,7 @@ document.getElementById('distanceBtn').onclick = () => {
   if (distanceMode) {
     map.setDraggable(true);
     map.setZoomable(true);
-    exitDistanceMode('거리재기 OFF');
+    exitDistanceMode('');
     return;
   }
 
@@ -1546,7 +1551,7 @@ document.getElementById('mobileToggle').onclick=()=>document.getElementById('sid
 
 function exitDistanceModeForUi() {
   if (distanceMode) {
-    exitDistanceMode('거리재기 종료 · 지도 조작 가능');
+    exitDistanceMode('');
   }
 }
 
