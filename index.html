@@ -648,6 +648,44 @@ color:#fff;
   }
 }
 
+
+/* ===== FINAL DISTANCE & HUD PATCH ===== */
+#distanceClearBtn{
+  display:none;
+}
+
+@media(max-width:768px){
+  #distanceClearBtn{
+    position:fixed !important;
+    right:14px !important;
+    bottom:78px !important;
+    z-index:10000 !important;
+    min-width:88px !important;
+    border-radius:999px !important;
+    background:rgba(15,23,42,.82) !important;
+    border:1px solid rgba(148,163,184,.24) !important;
+    color:#fff !important;
+    box-shadow:0 8px 22px rgba(0,0,0,.22) !important;
+  }
+}
+
+/* WEB HUD slim */
+@media(min-width:769px){
+  .mapTopHud{
+    width:300px !important;
+    max-width:300px !important;
+    padding:12px 14px !important;
+    background:linear-gradient(
+      135deg,
+      rgba(15,23,42,.62),
+      rgba(30,64,175,.42)
+    ) !important;
+    border:1px solid rgba(148,163,184,.14) !important;
+    box-shadow:0 8px 20px rgba(0,0,0,.14) !important;
+    backdrop-filter:blur(10px) !important;
+  }
+}
+
 </style>
 
 
@@ -1449,6 +1487,14 @@ function exitDistanceMode(message){
   if(btn){
     btn.textContent = '거리재기';
     btn.classList.remove('active');
+    btn.style.display = '';
+    btn.style.visibility = 'visible';
+    btn.style.opacity = '1';
+  }
+
+  const clearBtn = document.getElementById('distanceClearBtn');
+  if(clearBtn){
+    clearBtn.style.display = 'none';
   }
 
   const box = document.getElementById('distanceBox');
@@ -1562,6 +1608,8 @@ document.getElementById('distanceBtn').onclick = () => {
   if(distanceBtnEl){
     distanceBtnEl.textContent='거리재기 ON';
     distanceBtnEl.classList.add('active');
+  const clearBtnEl = document.getElementById('distanceClearBtn');
+  if(clearBtnEl){ clearBtnEl.style.display='block'; }
   }
 
   const distanceBoxEl = document.getElementById('distanceBox');
@@ -1578,6 +1626,8 @@ document.getElementById('distanceBtn').onclick = () => {
 };
 
 document.getElementById('distanceClearBtn').onclick = () => {
+  const clearBtn = document.getElementById('distanceClearBtn');
+  if(clearBtn){ clearBtn.style.display='none'; }
   resetDistanceObjects();
   map.setDraggable(true);
   map.setZoomable(true);
