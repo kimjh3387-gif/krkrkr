@@ -53,6 +53,17 @@ function enhanceMobilePopup(){
   });
 }
 
+
+// ===== MOBILE DUPLICATE COMPACT MODE =====
+function enableDuplicateCompactMode(){
+  if(window.innerWidth > 768) return;
+  document.body.classList.add('duplicate-list-mode');
+}
+
+function disableDuplicateCompactMode(){
+  document.body.classList.remove('duplicate-list-mode');
+}
+
 </script>
 <style>
 html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;font-family:'Segoe UI','Noto Sans KR',Arial,sans-serif;background:#0f172a;}
@@ -594,6 +605,48 @@ color:#fff;
   }
 }
 
+
+/* ===== MOBILE DUPLICATE COMPACT MODE ===== */
+@media (max-width:768px){
+
+  body.duplicate-list-mode .layerGrid,
+  body.duplicate-list-mode .search,
+  body.duplicate-list-mode .searchRow,
+  body.duplicate-list-mode .toolGrid,
+  body.duplicate-list-mode .metaBox,
+  body.duplicate-list-mode .regionWrap,
+  body.duplicate-list-mode .actionRow,
+  body.duplicate-list-mode .filterWrap,
+  body.duplicate-list-mode .distanceWrap,
+  body.duplicate-list-mode .topControls{
+    display:none !important;
+  }
+
+  body.duplicate-list-mode #sidebar{
+    padding-top:8px !important;
+    overflow-y:auto !important;
+  }
+
+  body.duplicate-list-mode .resultBox,
+  body.duplicate-list-mode #resultBox,
+  body.duplicate-list-mode #resultList{
+    height:auto !important;
+    max-height:none !important;
+    min-height:72dvh !important;
+    padding-bottom:220px !important;
+    overflow-y:auto !important;
+    -webkit-overflow-scrolling:touch !important;
+  }
+
+  body.duplicate-list-mode .title{
+    margin-bottom:10px !important;
+  }
+
+  body.duplicate-list-mode .duplicateInfoBox{
+    margin-bottom:10px !important;
+  }
+}
+
 </style>
 
 
@@ -657,7 +710,8 @@ let storeData = [];
 const DATA_URL = "./telco_store_data.json";
 const markerImages={"SKT": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMCIgaGVpZ2h0PSIzOCIgdmlld0JveD0iMCAwIDMwIDM4Ij4KPGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJnIiB4MT0iMCIgeDI9IjEiIHkxPSIwIiB5Mj0iMSI+CjxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiNmZWNhY2EiLz48c3RvcCBvZmZzZXQ9IjU1JSIgc3RvcC1jb2xvcj0iI2VmNDQ0NCIvPjxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iIzk5MWIxYiIvPgo8L2xpbmVhckdyYWRpZW50PjwvZGVmcz4KPHBhdGggZD0iTTE1IDM3QzE1IDM3IDI4IDIyLjUgMjggMTQuNUMyOCA2LjUgMjIuMiAxIDE1IDFDNy44IDEgMiA2LjUgMiAxNC41QzIgMjIuNSAxNSAzNyAxNSAzN1oiIGZpbGw9InVybCgjZykiIHN0cm9rZT0iI0Y4RkFGQyIgc3Ryb2tlLXdpZHRoPSIxLjQ1Ii8+CjxjaXJjbGUgY3g9IjE1IiBjeT0iMTQuNSIgcj0iNS4yIiBmaWxsPSIjRjhGQUZDIi8+PGNpcmNsZSBjeD0iMTUiIGN5PSIxNC41IiByPSIyLjUiIGZpbGw9IiM5OTFiMWIiLz4KPC9zdmc+", "KT": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMCIgaGVpZ2h0PSIzOCIgdmlld0JveD0iMCAwIDMwIDM4Ij4KPGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJnIiB4MT0iMCIgeDI9IjEiIHkxPSIwIiB5Mj0iMSI+CjxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiNlNWU3ZWIiLz48c3RvcCBvZmZzZXQ9IjU1JSIgc3RvcC1jb2xvcj0iIzM3NDE1MSIvPjxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iIzAzMDcxMiIvPgo8L2xpbmVhckdyYWRpZW50PjwvZGVmcz4KPHBhdGggZD0iTTE1IDM3QzE1IDM3IDI4IDIyLjUgMjggMTQuNUMyOCA2LjUgMjIuMiAxIDE1IDFDNy44IDEgMiA2LjUgMiAxNC41QzIgMjIuNSAxNSAzNyAxNSAzN1oiIGZpbGw9InVybCgjZykiIHN0cm9rZT0iI0Y4RkFGQyIgc3Ryb2tlLXdpZHRoPSIxLjQ1Ii8+CjxjaXJjbGUgY3g9IjE1IiBjeT0iMTQuNSIgcj0iNS4yIiBmaWxsPSIjRjhGQUZDIi8+PGNpcmNsZSBjeD0iMTUiIGN5PSIxNC41IiByPSIyLjUiIGZpbGw9IiMwMzA3MTIiLz4KPC9zdmc+", "LGU+": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMCIgaGVpZ2h0PSIzOCIgdmlld0JveD0iMCAwIDMwIDM4Ij4KPGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJnIiB4MT0iMCIgeDI9IjEiIHkxPSIwIiB5Mj0iMSI+CjxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiNmYmNmZTgiLz48c3RvcCBvZmZzZXQ9IjU1JSIgc3RvcC1jb2xvcj0iI2VjNDg5OSIvPjxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iIzdlMjJjZSIvPgo8L2xpbmVhckdyYWRpZW50PjwvZGVmcz4KPHBhdGggZD0iTTE1IDM3QzE1IDM3IDI4IDIyLjUgMjggMTQuNUMyOCA2LjUgMjIuMiAxIDE1IDFDNy44IDEgMiA2LjUgMiAxNC41QzIgMjIuNSAxNSAzNyAxNSAzN1oiIGZpbGw9InVybCgjZykiIHN0cm9rZT0iI0Y4RkFGQyIgc3Ryb2tlLXdpZHRoPSIxLjQ1Ii8+CjxjaXJjbGUgY3g9IjE1IiBjeT0iMTQuNSIgcj0iNS4yIiBmaWxsPSIjRjhGQUZDIi8+PGNpcmNsZSBjeD0iMTUiIGN5PSIxNC41IiByPSIyLjUiIGZpbGw9IiM3ZTIyY2UiLz4KPC9zdmc+", "판매점": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMCIgaGVpZ2h0PSIzOCIgdmlld0JveD0iMCAwIDMwIDM4Ij4KPGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJnIiB4MT0iMCIgeDI9IjEiIHkxPSIwIiB5Mj0iMSI+CjxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiNlMGYyZmUiLz48c3RvcCBvZmZzZXQ9IjU1JSIgc3RvcC1jb2xvcj0iIzM4YmRmOCIvPjxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iIzAzNjlhMSIvPgo8L2xpbmVhckdyYWRpZW50PjwvZGVmcz4KPHBhdGggZD0iTTE1IDM3QzE1IDM3IDI4IDIyLjUgMjggMTQuNUMyOCA2LjUgMjIuMiAxIDE1IDFDNy44IDEgMiA2LjUgMiAxNC41QzIgMjIuNSAxNSAzNyAxNSAzN1oiIGZpbGw9InVybCgjZykiIHN0cm9rZT0iI0Y4RkFGQyIgc3Ryb2tlLXdpZHRoPSIxLjQ1Ii8+CjxjaXJjbGUgY3g9IjE1IiBjeT0iMTQuNSIgcj0iNS4yIiBmaWxsPSIjRjhGQUZDIi8+PGNpcmNsZSBjeD0iMTUiIGN5PSIxNC41IiByPSIyLjUiIGZpbGw9IiMwMzY5YTEiLz4KPC9zdmc+", "중복": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMCIgaGVpZ2h0PSIzOCIgdmlld0JveD0iMCAwIDMwIDM4Ij4KPGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJnIiB4MT0iMCIgeDI9IjEiIHkxPSIwIiB5Mj0iMSI+CjxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiNjZmZmZmYiLz48c3RvcCBvZmZzZXQ9IjU1JSIgc3RvcC1jb2xvcj0iIzE0YjhiYSIvPjxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iIzBjNGExNiIvPgo8L2xpbmVhckdyYWRpZW50PjwvZGVmcz4KPHBhdGggZD0iTTE1IDM3QzE1IDM3IDI4IDIyLjUgMjggMTQuNUMyOCA2LjUgMjIuMiAxIDE1IDFDNy44IDEgMiA2LjUgMiAxNC41QzIgMjIuNSAxNSAzNyAxNSAzN1oiIGZpbGw9InVybCgjZykiIHN0cm9rZT0iI0Y4RkFGQyIgc3Ryb2tlLXdpZHRoPSIxLjQ1Ii8+CjxjaXJjbGUgY3g9IjE1IiBjeT0iMTQuNSIgcj0iNS4yIiBmaWxsPSIjRjhGQUZDIi8+PGNpcmNsZSBjeD0iMTUiIGN5PSIxNC41IiByPSIyLjUiIGZpbGw9IiMwYzRhMTYiLz4KPC9zdmc+"};
 const layerColors={"SKT":"#dc2626","KT":"#111827","LGU+":"#db2777","판매점":"#0284c7"};
-let duplicateMode=false;const db=document.getElementById('densityBtn');if(db)db.classList.remove('active');selectedLayers=new Set([]);
+let duplicateMode=false;
+disableDuplicateCompactMode();const db=document.getElementById('densityBtn');if(db)db.classList.remove('active');selectedLayers=new Set([]);
 let visibleData=[];
 let filterHudLockUntil=0;
 let activeInfo=null;
@@ -1255,7 +1309,7 @@ document.querySelectorAll('.layerBtn').forEach(btn=>{
     applyFilter(false);
   };
 });
-document.getElementById('regionSelect').onchange=()=>{
+document.getElementById('regionSelect').onchange=()=>{ disableDuplicateCompactMode(); {
   const regionSelect = document.getElementById('regionSelect');
   const citySelect = document.getElementById('citySelect');
   const dongSelect = document.getElementById('dongSelect');
@@ -1275,7 +1329,8 @@ document.getElementById('regionSelect').onchange=()=>{
 
   applyFilter(true);
 };
-document.getElementById('citySelect').onchange=()=>{duplicateMode=false;const db=document.getElementById('densityBtn');if(db)db.classList.remove('active');refreshDongOptions();applyFilter(true);};
+document.getElementById('citySelect').onchange=()=>{ disableDuplicateCompactMode(); {duplicateMode=false;
+disableDuplicateCompactMode();const db=document.getElementById('densityBtn');if(db)db.classList.remove('active');refreshDongOptions();applyFilter(true);};
 document.getElementById('dongSelect').onchange=()=>applyFilter(true);
 document.getElementById('searchBtn').onclick=()=>applyFilter(true);
 document.getElementById('searchInput').addEventListener('keydown',e=>{if(e.key==='Enter')applyFilter(true);});
