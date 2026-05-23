@@ -4,7 +4,56 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>통신시장 유통망 현황</title>
-<script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=61bc6696ec8edf55700c593bd6baef4f&libraries=clusterer,services"></script>
+<script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=61bc6696ec8edf55700c593bd6baef4f&libraries=clusterer,services">
+// ===== MOBILE SHEET UX =====
+function enhanceMobilePopup(){
+
+  if(window.innerWidth > 768) return;
+
+  document.querySelectorAll('.resultPopup').forEach(popup=>{
+
+    if(popup.dataset.mobileReady === '1') return;
+    popup.dataset.mobileReady = '1';
+
+    document.body.classList.add('sheet-open');
+
+    if(!popup.querySelector('.sheetHandle')){
+      const handle = document.createElement('div');
+      handle.className = 'sheetHandle';
+      popup.insertBefore(handle, popup.firstChild);
+    }
+
+    let startY = 0;
+
+    popup.addEventListener('touchstart', e=>{
+      startY = e.touches[0].clientY;
+    }, {passive:true});
+
+    popup.addEventListener('touchmove', e=>{
+      const dy = startY - e.touches[0].clientY;
+
+      if(dy > 40){
+        popup.classList.add('expanded');
+      }
+
+      if(dy < -60){
+        popup.classList.remove('expanded');
+      }
+
+    }, {passive:true});
+
+    const closeBtn = popup.querySelector('.closeBtn');
+
+    if(closeBtn){
+      closeBtn.addEventListener('click', ()=>{
+        document.body.classList.remove('sheet-open');
+      });
+    }
+
+  });
+}
+
+</script>
 <style>
 html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;font-family:'Segoe UI','Noto Sans KR',Arial,sans-serif;background:#0f172a;}
 #map{position:absolute;left:330px;top:0;right:0;bottom:0;width:auto;height:100%;}
@@ -449,6 +498,61 @@ color:#fff;
   will-change:transform, opacity;
   contain:layout paint;
 }
+
+/* ===== MOBILE BOTTOM SHEET ===== */
+@media (max-width:768px){
+
+  .resultPopup{
+    position:fixed !important;
+    left:0 !important;
+    right:0 !important;
+    bottom:0 !important;
+    width:100% !important;
+    height:42vh !important;
+    border-radius:22px 22px 0 0 !important;
+    z-index:9999 !important;
+    overflow:hidden !important;
+    animation:slideUpSheet .18s ease-out;
+  }
+
+  .resultPopup.expanded{
+    height:85vh !important;
+  }
+
+  .resultPopup .popupBody{
+    height:calc(100% - 60px) !important;
+    overflow-y:auto !important;
+    padding-bottom:120px !important;
+    -webkit-overflow-scrolling:touch;
+  }
+
+  .sheetHandle{
+    width:56px;
+    height:6px;
+    border-radius:999px;
+    background:rgba(255,255,255,.35);
+    margin:10px auto 8px;
+  }
+
+  body.sheet-open #sidebar{
+    transform:translateX(-110%);
+    opacity:.12;
+    pointer-events:none;
+    transition:.2s;
+  }
+}
+
+@keyframes slideUpSheet{
+  from{
+    transform:translateY(100%);
+    opacity:.4;
+  }
+  to{
+    transform:translateY(0);
+    opacity:1;
+  }
+}
+
 </style>
 
 
