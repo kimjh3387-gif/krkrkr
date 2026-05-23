@@ -4,67 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>통신시장 유통망 현황</title>
-<script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=61bc6696ec8edf55700c593bd6baef4f&libraries=clusterer,services">
-// ===== MOBILE SHEET UX =====
-function enhanceMobilePopup(){
-
-  if(window.innerWidth > 768) return;
-
-  document.querySelectorAll('.resultPopup').forEach(popup=>{
-
-    if(popup.dataset.mobileReady === '1') return;
-    popup.dataset.mobileReady = '1';
-
-    // document.body.classList.add('sheet-open');
-
-    if(!popup.querySelector('.sheetHandle')){
-      const handle = document.createElement('div');
-      handle.className = 'sheetHandle';
-      popup.insertBefore(handle, popup.firstChild);
-    }
-
-    let startY = 0;
-
-    popup.addEventListener('touchstart', e=>{
-      startY = e.touches[0].clientY;
-    }, {passive:true});
-
-    popup.addEventListener('touchmove', e=>{
-      const dy = startY - e.touches[0].clientY;
-
-      if(dy > 40){
-        popup.classList.add('expanded');
-      }
-
-      if(dy < -60){
-        popup.classList.remove('expanded');
-      }
-
-    }, {passive:true});
-
-    const closeBtn = popup.querySelector('.closeBtn');
-
-    if(closeBtn){
-      closeBtn.addEventListener('click', ()=>{
-        // document.body.classList.remove('sheet-open');
-      });
-    }
-
-  });
-}
-
-
-// ===== MOBILE DUPLICATE COMPACT MODE =====
-function enableDuplicateCompactMode(){
-  if(window.innerWidth > 768) return;
-  document.body.classList.add('duplicate-list-mode');
-}
-
-function disableDuplicateCompactMode(){
-  document.body.classList.remove('duplicate-list-mode');
-}
-
-</script>
+<script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=61bc6696ec8edf55700c593bd6baef4f&libraries=clusterer,services"></script>
 <style>
 html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;font-family:'Segoe UI','Noto Sans KR',Arial,sans-serif;background:#0f172a;}
 #map{position:absolute;left:330px;top:0;right:0;bottom:0;width:auto;height:100%;}
@@ -647,6 +587,19 @@ color:#fff;
   }
 }
 
+
+/* ===== MOBILE BUTTON RESPONSIVENESS PATCH ===== */
+.distanceBox{pointer-events:none !important;}
+@media(max-width:768px){
+  #sidebar,
+  #sidebar button,
+  #sidebar select,
+  #sidebar input{
+    pointer-events:auto !important;
+    touch-action:manipulation !important;
+  }
+}
+
 </style>
 
 
@@ -706,12 +659,23 @@ window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);
   <div class="resultbox" id="resultBox"></div>
 </div>
 <script>
+
+function enableDuplicateCompactMode(){
+  if(window.innerWidth <= 768){
+    document.body.classList.add('duplicate-list-mode');
+  }
+}
+
+function disableDuplicateCompactMode(){
+  document.body.classList.remove('duplicate-list-mode');
+}
+
 let storeData = [];
 const DATA_URL = "./telco_store_data.json";
 const markerImages={"SKT": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMCIgaGVpZ2h0PSIzOCIgdmlld0JveD0iMCAwIDMwIDM4Ij4KPGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJnIiB4MT0iMCIgeDI9IjEiIHkxPSIwIiB5Mj0iMSI+CjxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiNmZWNhY2EiLz48c3RvcCBvZmZzZXQ9IjU1JSIgc3RvcC1jb2xvcj0iI2VmNDQ0NCIvPjxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iIzk5MWIxYiIvPgo8L2xpbmVhckdyYWRpZW50PjwvZGVmcz4KPHBhdGggZD0iTTE1IDM3QzE1IDM3IDI4IDIyLjUgMjggMTQuNUMyOCA2LjUgMjIuMiAxIDE1IDFDNy44IDEgMiA2LjUgMiAxNC41QzIgMjIuNSAxNSAzNyAxNSAzN1oiIGZpbGw9InVybCgjZykiIHN0cm9rZT0iI0Y4RkFGQyIgc3Ryb2tlLXdpZHRoPSIxLjQ1Ii8+CjxjaXJjbGUgY3g9IjE1IiBjeT0iMTQuNSIgcj0iNS4yIiBmaWxsPSIjRjhGQUZDIi8+PGNpcmNsZSBjeD0iMTUiIGN5PSIxNC41IiByPSIyLjUiIGZpbGw9IiM5OTFiMWIiLz4KPC9zdmc+", "KT": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMCIgaGVpZ2h0PSIzOCIgdmlld0JveD0iMCAwIDMwIDM4Ij4KPGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJnIiB4MT0iMCIgeDI9IjEiIHkxPSIwIiB5Mj0iMSI+CjxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiNlNWU3ZWIiLz48c3RvcCBvZmZzZXQ9IjU1JSIgc3RvcC1jb2xvcj0iIzM3NDE1MSIvPjxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iIzAzMDcxMiIvPgo8L2xpbmVhckdyYWRpZW50PjwvZGVmcz4KPHBhdGggZD0iTTE1IDM3QzE1IDM3IDI4IDIyLjUgMjggMTQuNUMyOCA2LjUgMjIuMiAxIDE1IDFDNy44IDEgMiA2LjUgMiAxNC41QzIgMjIuNSAxNSAzNyAxNSAzN1oiIGZpbGw9InVybCgjZykiIHN0cm9rZT0iI0Y4RkFGQyIgc3Ryb2tlLXdpZHRoPSIxLjQ1Ii8+CjxjaXJjbGUgY3g9IjE1IiBjeT0iMTQuNSIgcj0iNS4yIiBmaWxsPSIjRjhGQUZDIi8+PGNpcmNsZSBjeD0iMTUiIGN5PSIxNC41IiByPSIyLjUiIGZpbGw9IiMwMzA3MTIiLz4KPC9zdmc+", "LGU+": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMCIgaGVpZ2h0PSIzOCIgdmlld0JveD0iMCAwIDMwIDM4Ij4KPGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJnIiB4MT0iMCIgeDI9IjEiIHkxPSIwIiB5Mj0iMSI+CjxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiNmYmNmZTgiLz48c3RvcCBvZmZzZXQ9IjU1JSIgc3RvcC1jb2xvcj0iI2VjNDg5OSIvPjxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iIzdlMjJjZSIvPgo8L2xpbmVhckdyYWRpZW50PjwvZGVmcz4KPHBhdGggZD0iTTE1IDM3QzE1IDM3IDI4IDIyLjUgMjggMTQuNUMyOCA2LjUgMjIuMiAxIDE1IDFDNy44IDEgMiA2LjUgMiAxNC41QzIgMjIuNSAxNSAzNyAxNSAzN1oiIGZpbGw9InVybCgjZykiIHN0cm9rZT0iI0Y4RkFGQyIgc3Ryb2tlLXdpZHRoPSIxLjQ1Ii8+CjxjaXJjbGUgY3g9IjE1IiBjeT0iMTQuNSIgcj0iNS4yIiBmaWxsPSIjRjhGQUZDIi8+PGNpcmNsZSBjeD0iMTUiIGN5PSIxNC41IiByPSIyLjUiIGZpbGw9IiM3ZTIyY2UiLz4KPC9zdmc+", "판매점": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMCIgaGVpZ2h0PSIzOCIgdmlld0JveD0iMCAwIDMwIDM4Ij4KPGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJnIiB4MT0iMCIgeDI9IjEiIHkxPSIwIiB5Mj0iMSI+CjxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiNlMGYyZmUiLz48c3RvcCBvZmZzZXQ9IjU1JSIgc3RvcC1jb2xvcj0iIzM4YmRmOCIvPjxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iIzAzNjlhMSIvPgo8L2xpbmVhckdyYWRpZW50PjwvZGVmcz4KPHBhdGggZD0iTTE1IDM3QzE1IDM3IDI4IDIyLjUgMjggMTQuNUMyOCA2LjUgMjIuMiAxIDE1IDFDNy44IDEgMiA2LjUgMiAxNC41QzIgMjIuNSAxNSAzNyAxNSAzN1oiIGZpbGw9InVybCgjZykiIHN0cm9rZT0iI0Y4RkFGQyIgc3Ryb2tlLXdpZHRoPSIxLjQ1Ii8+CjxjaXJjbGUgY3g9IjE1IiBjeT0iMTQuNSIgcj0iNS4yIiBmaWxsPSIjRjhGQUZDIi8+PGNpcmNsZSBjeD0iMTUiIGN5PSIxNC41IiByPSIyLjUiIGZpbGw9IiMwMzY5YTEiLz4KPC9zdmc+", "중복": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMCIgaGVpZ2h0PSIzOCIgdmlld0JveD0iMCAwIDMwIDM4Ij4KPGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJnIiB4MT0iMCIgeDI9IjEiIHkxPSIwIiB5Mj0iMSI+CjxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiNjZmZmZmYiLz48c3RvcCBvZmZzZXQ9IjU1JSIgc3RvcC1jb2xvcj0iIzE0YjhiYSIvPjxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iIzBjNGExNiIvPgo8L2xpbmVhckdyYWRpZW50PjwvZGVmcz4KPHBhdGggZD0iTTE1IDM3QzE1IDM3IDI4IDIyLjUgMjggMTQuNUMyOCA2LjUgMjIuMiAxIDE1IDFDNy44IDEgMiA2LjUgMiAxNC41QzIgMjIuNSAxNSAzNyAxNSAzN1oiIGZpbGw9InVybCgjZykiIHN0cm9rZT0iI0Y4RkFGQyIgc3Ryb2tlLXdpZHRoPSIxLjQ1Ii8+CjxjaXJjbGUgY3g9IjE1IiBjeT0iMTQuNSIgcj0iNS4yIiBmaWxsPSIjRjhGQUZDIi8+PGNpcmNsZSBjeD0iMTUiIGN5PSIxNC41IiByPSIyLjUiIGZpbGw9IiMwYzRhMTYiLz4KPC9zdmc+"};
 const layerColors={"SKT":"#dc2626","KT":"#111827","LGU+":"#db2777","판매점":"#0284c7"};
 let duplicateMode=false;
-disableDuplicateCompactMode();const db=document.getElementById('densityBtn');if(db)db.classList.remove('active');selectedLayers=new Set([]);
+let selectedLayers=new Set([]);
 let visibleData=[];
 let filterHudLockUntil=0;
 let activeInfo=null;
@@ -975,11 +939,13 @@ function getDuplicateAddressGroups(data){
 
 function showDuplicateAddressGroups(){
   duplicateMode = !duplicateMode;
+  if(duplicateMode){ enableDuplicateCompactMode(); } else { disableDuplicateCompactMode(); }
 
   const densityBtn = document.getElementById('densityBtn');
   if(densityBtn) densityBtn.classList.toggle('active', duplicateMode);
 
   if(!duplicateMode){
+    disableDuplicateCompactMode();
     // 집단상가 모드 해제: 현재 필터 상태로 복귀
     applyFilter(false);
     renderList([]);
@@ -1254,6 +1220,9 @@ function syncFiltersFromStore(store, rebuild=true){
 }
 
 document.getElementById('allOnBtn').onclick = () => {
+  disableDuplicateCompactMode();
+  duplicateMode = false;
+  const db = document.getElementById('densityBtn'); if(db) db.classList.remove('active');
   selectedLayers = new Set(["SKT","KT","LGU+","판매점"]);
   document.querySelectorAll('.layerBtn').forEach(b => b.classList.add('active'));
 
@@ -1275,6 +1244,9 @@ document.getElementById('allOnBtn').onclick = () => {
 };
 
 document.getElementById('allOffBtn').onclick = () => {
+  disableDuplicateCompactMode();
+  duplicateMode = false;
+  const db = document.getElementById('densityBtn'); if(db) db.classList.remove('active');
   selectedLayers = new Set([]);
   document.querySelectorAll('.layerBtn').forEach(b => b.classList.remove('active'));
 
@@ -1291,6 +1263,9 @@ document.getElementById('allOffBtn').onclick = () => {
 
 document.querySelectorAll('.layerBtn').forEach(btn=>{
   btn.onclick=()=>{
+    disableDuplicateCompactMode();
+    duplicateMode = false;
+    const db = document.getElementById('densityBtn'); if(db) db.classList.remove('active');
     const l=btn.dataset.layer;
 
     if(selectedLayers.has(l)){
@@ -1309,7 +1284,12 @@ document.querySelectorAll('.layerBtn').forEach(btn=>{
     applyFilter(false);
   };
 });
-document.getElementById('regionSelect').onchange=()=>{ disableDuplicateCompactMode(); {
+document.getElementById('regionSelect').onchange = () => {
+  disableDuplicateCompactMode();
+  duplicateMode = false;
+  const db = document.getElementById('densityBtn');
+  if(db) db.classList.remove('active');
+
   const regionSelect = document.getElementById('regionSelect');
   const citySelect = document.getElementById('citySelect');
   const dongSelect = document.getElementById('dongSelect');
@@ -1329,12 +1309,57 @@ document.getElementById('regionSelect').onchange=()=>{ disableDuplicateCompactMo
 
   applyFilter(true);
 };
-document.getElementById('citySelect').onchange=()=>{ disableDuplicateCompactMode(); {duplicateMode=false;
-disableDuplicateCompactMode();const db=document.getElementById('densityBtn');if(db)db.classList.remove('active');refreshDongOptions();applyFilter(true);};
-document.getElementById('dongSelect').onchange=()=>applyFilter(true);
-document.getElementById('searchBtn').onclick=()=>applyFilter(true);
-document.getElementById('searchInput').addEventListener('keydown',e=>{if(e.key==='Enter')applyFilter(true);});
-document.getElementById('resetBtn').onclick=()=>{document.getElementById('searchInput').value='';document.getElementById('regionSelect').value='';document.getElementById('citySelect').value='';document.getElementById('dongSelect').value='';selectedLayers=new Set([]);document.querySelectorAll('.layerBtn').forEach(b=>b.classList.remove('active'));applyFilter(false);renderList([]);map.setCenter(new kakao.maps.LatLng(36.35,127.8));map.setLevel(13);clearInfo();const searchCountBox=document.getElementById('searchCountBox');if(searchCountBox)searchCountBox.textContent='';};
+
+document.getElementById('citySelect').onchange = () => {
+  disableDuplicateCompactMode();
+  duplicateMode = false;
+  const db = document.getElementById('densityBtn');
+  if(db) db.classList.remove('active');
+
+  refreshDongOptions();
+  applyFilter(true);
+};
+
+document.getElementById('dongSelect').onchange = () => {
+  disableDuplicateCompactMode();
+  applyFilter(true);
+};
+
+document.getElementById('searchBtn').onclick = () => {
+  disableDuplicateCompactMode();
+  applyFilter(true);
+};
+
+document.getElementById('searchInput').addEventListener('keydown', e => {
+  if(e.key === 'Enter'){
+    disableDuplicateCompactMode();
+    applyFilter(true);
+  }
+});
+
+document.getElementById('resetBtn').onclick = () => {
+  disableDuplicateCompactMode();
+  duplicateMode = false;
+  const db = document.getElementById('densityBtn');
+  if(db) db.classList.remove('active');
+
+  document.getElementById('searchInput').value = '';
+  document.getElementById('regionSelect').value = '';
+  document.getElementById('citySelect').value = '';
+  document.getElementById('dongSelect').value = '';
+
+  selectedLayers = new Set([]);
+  document.querySelectorAll('.layerBtn').forEach(b=>b.classList.remove('active'));
+
+  applyFilter(false);
+  renderList([]);
+  map.setCenter(new kakao.maps.LatLng(36.35,127.8));
+  map.setLevel(13);
+  clearInfo();
+
+  const searchCountBox=document.getElementById('searchCountBox');
+  if(searchCountBox) searchCountBox.textContent='';
+};
 
 // Distance tool
 
@@ -1528,6 +1553,7 @@ kakao.maps.event.addListener(map,'click',function(mouseEvent){
   }
 
   clearInfo();
+  disableDuplicateCompactMode();
 
   if (window.innerWidth <= 768) {
     document.getElementById('sidebar').classList.remove('open');
