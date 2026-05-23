@@ -650,24 +650,9 @@ color:#fff;
 
 
 /* ===== FINAL DISTANCE & HUD PATCH ===== */
-#distanceClearBtn{
-  display:none;
-}
 
-@media(max-width:768px){
-  #distanceClearBtn{
-    position:fixed !important;
-    right:14px !important;
-    bottom:78px !important;
-    z-index:10000 !important;
-    min-width:88px !important;
-    border-radius:999px !important;
-    background:rgba(15,23,42,.82) !important;
-    border:1px solid rgba(148,163,184,.24) !important;
-    color:#fff !important;
-    box-shadow:0 8px 22px rgba(0,0,0,.22) !important;
-  }
-}
+
+
 
 /* WEB HUD slim */
 @media(min-width:769px){
@@ -684,6 +669,12 @@ color:#fff;
     box-shadow:0 8px 20px rgba(0,0,0,.14) !important;
     backdrop-filter:blur(10px) !important;
   }
+}
+
+
+/* ===== VIEWPORT BUTTON PATCH ===== */
+#viewportBtn{
+  display:block !important;
 }
 
 </style>
@@ -732,7 +723,7 @@ window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);
   <input type="text" class="search" id="searchInput" placeholder="상호 · 주소 검색">
   <div class="btnRow"><button class="actionBtn" id="searchBtn">검색</button><button class="actionBtn reset" id="resetBtn">초기화</button></div>
   <div class="searchCountBox" id="searchCountBox"></div>
-  <div class="toolGrid"><button class="toolBtn" id="distanceBtn">거리재기</button><button class="toolBtn" id="distanceClearBtn">거리초기화</button><button class="toolBtn" id="densityBtn">집단상가</button><button class="toolBtn" id="nationalShareBtn">전국비중</button></div>
+  <div class="toolGrid"><button class="toolBtn" id="distanceBtn">거리재기</button><button class="toolBtn" id="viewportBtn">현재화면</button><button class="toolBtn" id="densityBtn">집단상가</button><button class="toolBtn" id="nationalShareBtn">전국비중</button></div>
 <div class="mapGuideText">
   <div>기준일자 : 2026-05-20</div>
   <div>출처 : KAIT · SKT · KT · LGU+</div>
@@ -1492,11 +1483,6 @@ function exitDistanceMode(message){
     btn.style.opacity = '1';
   }
 
-  const clearBtn = document.getElementById('distanceClearBtn');
-  if(clearBtn){
-    clearBtn.style.display = 'none';
-  }
-
   const box = document.getElementById('distanceBox');
   if(box){
     box.classList.remove('show');
@@ -1595,21 +1581,20 @@ function handleDistanceClick(latLng){
 
 document.getElementById('distanceBtn').onclick = () => {
   if (distanceMode) {
-    map.setDraggable(true);
-    map.setZoomable(true);
+    resetDistanceObjects();
     exitDistanceMode();
     return;
   }
 
   resetDistanceObjects();
   clearInfo();
+
   distanceMode = true;
+
   const distanceBtnEl = document.getElementById('distanceBtn');
   if(distanceBtnEl){
-    distanceBtnEl.textContent='거리재기 ON';
+    distanceBtnEl.textContent='거리초기화';
     distanceBtnEl.classList.add('active');
-  const clearBtnEl = document.getElementById('distanceClearBtn');
-  if(clearBtnEl){ clearBtnEl.style.display='block'; }
   }
 
   const distanceBoxEl = document.getElementById('distanceBox');
@@ -1625,14 +1610,32 @@ document.getElementById('distanceBtn').onclick = () => {
   }
 };
 
-document.getElementById('distanceClearBtn').onclick = () => {
-  const clearBtn = document.getElementById('distanceClearBtn');
-  if(clearBtn){ clearBtn.style.display='none'; }
-  resetDistanceObjects();
-  map.setDraggable(true);
-  map.setZoomable(true);
-  exitDistanceMode();
-};
+const viewportBtn = document.getElementById('viewportBtn');
+if(viewportBtn){
+  viewportBtn.onclick = () => {
+    const bounds = map.getBounds();
+    const data = storeData.filter(v => {
+      if(!selectedLayers.has(v.layer)) return false;
+      if(!v.lat || !v.lng) return false;
+      return bounds.contain(new kakao.maps.LatLng(v.lat, v.lng));
+    });
+
+    visibleData = data;
+    renderList(data);
+
+    const box = document.getElementById('searchCountBox');
+    if(box){
+      box.textContent = `현재화면 : ${data.length.toLocaleString()}개`;
+    }
+
+    updateMapTopHud(data.length, null, {
+      title:'현재 화면 유통망 현황',
+      subtitle:'지도 표시 영역 기준',
+      areaName:'현재 화면',
+      data:data
+    });
+  };
+}
 
 const densityBtn = document.getElementById('densityBtn');
 if(densityBtn){
