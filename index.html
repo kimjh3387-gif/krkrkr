@@ -5,59 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>통신시장 유통망 현황</title>
 <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=61bc6696ec8edf55700c593bd6baef4f&libraries=clusterer,services">
-// ===== MOBILE SHEET UX =====
-function enhanceMobilePopup(){
-
-  if(window.innerWidth > 768) return;
-
-  document.querySelectorAll('.resultPopup').forEach(popup=>{
-
-    if(popup.dataset.mobileReady === '1') return;
-    popup.dataset.mobileReady = '1';
-
-    // document.body.classList.add('sheet-open');
-
-    if(!popup.querySelector('.sheetHandle')){
-      const handle = document.createElement('div');
-      handle.className = 'sheetHandle';
-      popup.insertBefore(handle, popup.firstChild);
-    }
-
-    let startY = 0;
-
-    popup.addEventListener('touchstart', e=>{
-      startY = e.touches[0].clientY;
-    }, {passive:true});
-
-    popup.addEventListener('touchmove', e=>{
-      const dy = startY - e.touches[0].clientY;
-
-      if(dy > 40){
-        popup.classList.add('expanded');
-      }
-
-      if(dy < -60){
-        popup.classList.remove('expanded');
-      }
-
-    }, {passive:true});
-
-    const closeBtn = popup.querySelector('.closeBtn');
-
-    if(closeBtn){
-      closeBtn.addEventListener('click', ()=>{
-        // document.body.classList.remove('sheet-open');
-      });
-    }
-
-  });
-}
-
-
-// ===== MOBILE DUPLICATE COMPACT MODE =====
+// ===== MOBILE DUPLICATE COMPACT MODE - STABLE =====
 function enableDuplicateCompactMode(){
-  if(window.innerWidth > 768) return;
-  document.body.classList.add('duplicate-list-mode');
+  if(window.innerWidth <= 768){
+    document.body.classList.add('duplicate-list-mode');
+  }
 }
 
 function disableDuplicateCompactMode(){
@@ -510,148 +462,46 @@ color:#fff;
   contain:layout paint;
 }
 
-/* ===== MOBILE BOTTOM SHEET ===== */
+/* ===== MOBILE DUPLICATE COMPACT MODE - STABLE ===== */
 @media (max-width:768px){
-
-  .resultPopup{
-    position:fixed !important;
-    left:0 !important;
-    right:0 !important;
-    bottom:0 !important;
-    width:100% !important;
-    height:42vh !important;
-    border-radius:22px 22px 0 0 !important;
-    z-index:9999 !important;
-    overflow:hidden !important;
-    animation:slideUpSheet .18s ease-out;
-  }
-
-  .resultPopup.expanded{
-    height:85vh !important;
-  }
-
-  .resultPopup .popupBody{
-    height:calc(100% - 60px) !important;
-    overflow-y:auto !important;
-    padding-bottom:120px !important;
-    -webkit-overflow-scrolling:touch;
-  }
-
-  .sheetHandle{
-    width:56px;
-    height:6px;
-    border-radius:999px;
-    background:rgba(255,255,255,.35);
-    margin:10px auto 8px;
-  }
-
-  body.sheet-open #sidebar{
-    transform:translateX(-110%);
-    opacity:.12;
-    pointer-events:none;
-    transition:.2s;
-  }
-}
-
-@keyframes slideUpSheet{
-  from{
-    transform:translateY(100%);
-    opacity:.4;
-  }
-  to{
-    transform:translateY(0);
-    opacity:1;
-  }
-}
-
-
-/* ===== MOBILE SIDEBAR SCROLL FIX ===== */
-@media (max-width:768px){
-
-  #sidebar{
-    height:100dvh !important;
-    max-height:100dvh !important;
-    overflow-y:auto !important;
-    overflow-x:hidden !important;
-    -webkit-overflow-scrolling:touch !important;
-    padding-bottom:180px !important;
-    box-sizing:border-box !important;
-  }
-
-  .resultBox,
-  .resultbox,
-  #resultBox,
-  #resultList{
-    height:auto !important;
-    max-height:none !important;
-    overflow:visible !important;
-    padding-bottom:180px !important;
-  }
-
-  .itemCard,
-  .resultItem,
-  .listItem{
-    scroll-margin-bottom:160px !important;
-  }
-
-  body.sheet-open #sidebar{
-    transform:none !important;
-    opacity:1 !important;
-    pointer-events:auto !important;
-  }
-
-  .mapTopHud{
-    z-index:20 !important;
-  }
-}
-
-
-/* ===== MOBILE DUPLICATE COMPACT MODE ===== */
-@media (max-width:768px){
-
   body.duplicate-list-mode .layerGrid,
+  body.duplicate-list-mode .ctrlAllRow,
   body.duplicate-list-mode .search,
-  body.duplicate-list-mode .searchRow,
+  body.duplicate-list-mode .btnRow,
   body.duplicate-list-mode .toolGrid,
-  body.duplicate-list-mode .metaBox,
-  body.duplicate-list-mode .regionWrap,
-  body.duplicate-list-mode .actionRow,
-  body.duplicate-list-mode .filterWrap,
-  body.duplicate-list-mode .distanceWrap,
-  body.duplicate-list-mode .topControls{
+  body.duplicate-list-mode .mapGuideText,
+  body.duplicate-list-mode .select{
     display:none !important;
   }
 
   body.duplicate-list-mode #sidebar{
-    padding-top:8px !important;
+    height:100dvh !important;
+    max-height:100dvh !important;
     overflow-y:auto !important;
+    overflow-x:hidden !important;
+    padding-top:12px !important;
+    padding-bottom:180px !important;
+    box-sizing:border-box !important;
   }
 
-  body.duplicate-list-mode .resultBox,
-  body.duplicate-list-mode #resultBox,
-  body.duplicate-list-mode #resultList{
+  body.duplicate-list-mode .resultbox,
+  body.duplicate-list-mode #resultBox{
     height:auto !important;
     max-height:none !important;
     min-height:72dvh !important;
+    overflow-y:visible !important;
     padding-bottom:220px !important;
-    overflow-y:auto !important;
-    -webkit-overflow-scrolling:touch !important;
   }
 
   body.duplicate-list-mode .title{
-    margin-bottom:10px !important;
+    margin-bottom:12px !important;
   }
 
-  body.duplicate-list-mode .duplicateInfoBox{
-    margin-bottom:10px !important;
+  body.duplicate-list-mode .searchCountBox{
+    margin-bottom:12px !important;
   }
 }
 
-
-@keyframes fadeToast{
-  from{opacity:0;transform:translateX(-50%) translateY(10px);}
-  to{opacity:1;transform:translateX(-50%) translateY(0);}
-}
 </style>
 
 
@@ -698,7 +548,7 @@ window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);
   <input type="text" class="search" id="searchInput" placeholder="상호 · 주소 검색">
   <div class="btnRow"><button class="actionBtn" id="searchBtn">검색</button><button class="actionBtn reset" id="resetBtn">초기화</button></div>
   <div class="searchCountBox" id="searchCountBox"></div>
-  <div class="toolGrid"><button class="toolBtn" id="distanceBtn" id="distanceBtn">거리재기</button><button class="toolBtn" id="distanceClearBtn">거리초기화</button><button class="toolBtn" id="densityBtn">집단상가</button><button class="toolBtn" id="nationalShareBtn">전국비중</button></div>
+  <div class="toolGrid"><button class="toolBtn" id="distanceBtn">거리재기</button><button class="toolBtn" id="distanceClearBtn">거리초기화</button><button class="toolBtn" id="densityBtn">집단상가</button><button class="toolBtn" id="nationalShareBtn">전국비중</button></div>
 <div class="mapGuideText">
   <div>기준일자 : 2026-05-20</div>
   <div>출처 : KAIT · SKT · KT · LGU+</div>
@@ -715,8 +565,7 @@ let storeData = [];
 const DATA_URL = "./telco_store_data.json";
 const markerImages={"SKT": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMCIgaGVpZ2h0PSIzOCIgdmlld0JveD0iMCAwIDMwIDM4Ij4KPGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJnIiB4MT0iMCIgeDI9IjEiIHkxPSIwIiB5Mj0iMSI+CjxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiNmZWNhY2EiLz48c3RvcCBvZmZzZXQ9IjU1JSIgc3RvcC1jb2xvcj0iI2VmNDQ0NCIvPjxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iIzk5MWIxYiIvPgo8L2xpbmVhckdyYWRpZW50PjwvZGVmcz4KPHBhdGggZD0iTTE1IDM3QzE1IDM3IDI4IDIyLjUgMjggMTQuNUMyOCA2LjUgMjIuMiAxIDE1IDFDNy44IDEgMiA2LjUgMiAxNC41QzIgMjIuNSAxNSAzNyAxNSAzN1oiIGZpbGw9InVybCgjZykiIHN0cm9rZT0iI0Y4RkFGQyIgc3Ryb2tlLXdpZHRoPSIxLjQ1Ii8+CjxjaXJjbGUgY3g9IjE1IiBjeT0iMTQuNSIgcj0iNS4yIiBmaWxsPSIjRjhGQUZDIi8+PGNpcmNsZSBjeD0iMTUiIGN5PSIxNC41IiByPSIyLjUiIGZpbGw9IiM5OTFiMWIiLz4KPC9zdmc+", "KT": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMCIgaGVpZ2h0PSIzOCIgdmlld0JveD0iMCAwIDMwIDM4Ij4KPGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJnIiB4MT0iMCIgeDI9IjEiIHkxPSIwIiB5Mj0iMSI+CjxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiNlNWU3ZWIiLz48c3RvcCBvZmZzZXQ9IjU1JSIgc3RvcC1jb2xvcj0iIzM3NDE1MSIvPjxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iIzAzMDcxMiIvPgo8L2xpbmVhckdyYWRpZW50PjwvZGVmcz4KPHBhdGggZD0iTTE1IDM3QzE1IDM3IDI4IDIyLjUgMjggMTQuNUMyOCA2LjUgMjIuMiAxIDE1IDFDNy44IDEgMiA2LjUgMiAxNC41QzIgMjIuNSAxNSAzNyAxNSAzN1oiIGZpbGw9InVybCgjZykiIHN0cm9rZT0iI0Y4RkFGQyIgc3Ryb2tlLXdpZHRoPSIxLjQ1Ii8+CjxjaXJjbGUgY3g9IjE1IiBjeT0iMTQuNSIgcj0iNS4yIiBmaWxsPSIjRjhGQUZDIi8+PGNpcmNsZSBjeD0iMTUiIGN5PSIxNC41IiByPSIyLjUiIGZpbGw9IiMwMzA3MTIiLz4KPC9zdmc+", "LGU+": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMCIgaGVpZ2h0PSIzOCIgdmlld0JveD0iMCAwIDMwIDM4Ij4KPGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJnIiB4MT0iMCIgeDI9IjEiIHkxPSIwIiB5Mj0iMSI+CjxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiNmYmNmZTgiLz48c3RvcCBvZmZzZXQ9IjU1JSIgc3RvcC1jb2xvcj0iI2VjNDg5OSIvPjxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iIzdlMjJjZSIvPgo8L2xpbmVhckdyYWRpZW50PjwvZGVmcz4KPHBhdGggZD0iTTE1IDM3QzE1IDM3IDI4IDIyLjUgMjggMTQuNUMyOCA2LjUgMjIuMiAxIDE1IDFDNy44IDEgMiA2LjUgMiAxNC41QzIgMjIuNSAxNSAzNyAxNSAzN1oiIGZpbGw9InVybCgjZykiIHN0cm9rZT0iI0Y4RkFGQyIgc3Ryb2tlLXdpZHRoPSIxLjQ1Ii8+CjxjaXJjbGUgY3g9IjE1IiBjeT0iMTQuNSIgcj0iNS4yIiBmaWxsPSIjRjhGQUZDIi8+PGNpcmNsZSBjeD0iMTUiIGN5PSIxNC41IiByPSIyLjUiIGZpbGw9IiM3ZTIyY2UiLz4KPC9zdmc+", "판매점": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMCIgaGVpZ2h0PSIzOCIgdmlld0JveD0iMCAwIDMwIDM4Ij4KPGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJnIiB4MT0iMCIgeDI9IjEiIHkxPSIwIiB5Mj0iMSI+CjxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiNlMGYyZmUiLz48c3RvcCBvZmZzZXQ9IjU1JSIgc3RvcC1jb2xvcj0iIzM4YmRmOCIvPjxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iIzAzNjlhMSIvPgo8L2xpbmVhckdyYWRpZW50PjwvZGVmcz4KPHBhdGggZD0iTTE1IDM3QzE1IDM3IDI4IDIyLjUgMjggMTQuNUMyOCA2LjUgMjIuMiAxIDE1IDFDNy44IDEgMiA2LjUgMiAxNC41QzIgMjIuNSAxNSAzNyAxNSAzN1oiIGZpbGw9InVybCgjZykiIHN0cm9rZT0iI0Y4RkFGQyIgc3Ryb2tlLXdpZHRoPSIxLjQ1Ii8+CjxjaXJjbGUgY3g9IjE1IiBjeT0iMTQuNSIgcj0iNS4yIiBmaWxsPSIjRjhGQUZDIi8+PGNpcmNsZSBjeD0iMTUiIGN5PSIxNC41IiByPSIyLjUiIGZpbGw9IiMwMzY5YTEiLz4KPC9zdmc+", "중복": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMCIgaGVpZ2h0PSIzOCIgdmlld0JveD0iMCAwIDMwIDM4Ij4KPGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJnIiB4MT0iMCIgeDI9IjEiIHkxPSIwIiB5Mj0iMSI+CjxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiNjZmZmZmYiLz48c3RvcCBvZmZzZXQ9IjU1JSIgc3RvcC1jb2xvcj0iIzE0YjhiYSIvPjxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iIzBjNGExNiIvPgo8L2xpbmVhckdyYWRpZW50PjwvZGVmcz4KPHBhdGggZD0iTTE1IDM3QzE1IDM3IDI4IDIyLjUgMjggMTQuNUMyOCA2LjUgMjIuMiAxIDE1IDFDNy44IDEgMiA2LjUgMiAxNC41QzIgMjIuNSAxNSAzNyAxNSAzN1oiIGZpbGw9InVybCgjZykiIHN0cm9rZT0iI0Y4RkFGQyIgc3Ryb2tlLXdpZHRoPSIxLjQ1Ii8+CjxjaXJjbGUgY3g9IjE1IiBjeT0iMTQuNSIgcj0iNS4yIiBmaWxsPSIjRjhGQUZDIi8+PGNpcmNsZSBjeD0iMTUiIGN5PSIxNC41IiByPSIyLjUiIGZpbGw9IiMwYzRhMTYiLz4KPC9zdmc+"};
 const layerColors={"SKT":"#dc2626","KT":"#111827","LGU+":"#db2777","판매점":"#0284c7"};
-let duplicateMode=false;
-disableDuplicateCompactMode();const db=document.getElementById('densityBtn');if(db)db.classList.remove('active');selectedLayers=new Set([]);
+let duplicateMode=false;const db=document.getElementById('densityBtn');if(db)db.classList.remove('active');selectedLayers=new Set([]);
 let visibleData=[];
 let filterHudLockUntil=0;
 let activeInfo=null;
@@ -726,7 +575,6 @@ let myLocationMarker=null;
 let myLocationCircle=null;
 let searchMarker=null;
 let distanceMode=false;
-try{document.getElementById('distanceBtn').textContent='거리재기';}catch(e){}
 let distancePoints=[];
 let distanceLine=null;
 let distanceLabels=[];
@@ -981,11 +829,13 @@ function getDuplicateAddressGroups(data){
 
 function showDuplicateAddressGroups(){
   duplicateMode = !duplicateMode;
+  if(duplicateMode){ enableDuplicateCompactMode(); } else { disableDuplicateCompactMode(); }
 
   const densityBtn = document.getElementById('densityBtn');
   if(densityBtn) densityBtn.classList.toggle('active', duplicateMode);
 
   if(!duplicateMode){
+    disableDuplicateCompactMode();
     // 집단상가 모드 해제: 현재 필터 상태로 복귀
     applyFilter(false);
     renderList([]);
@@ -1260,6 +1110,7 @@ function syncFiltersFromStore(store, rebuild=true){
 }
 
 document.getElementById('allOnBtn').onclick = () => {
+  disableDuplicateCompactMode();
   selectedLayers = new Set(["SKT","KT","LGU+","판매점"]);
   document.querySelectorAll('.layerBtn').forEach(b => b.classList.add('active'));
 
@@ -1281,6 +1132,7 @@ document.getElementById('allOnBtn').onclick = () => {
 };
 
 document.getElementById('allOffBtn').onclick = () => {
+  disableDuplicateCompactMode();
   selectedLayers = new Set([]);
   document.querySelectorAll('.layerBtn').forEach(b => b.classList.remove('active'));
 
@@ -1315,7 +1167,7 @@ document.querySelectorAll('.layerBtn').forEach(btn=>{
     applyFilter(false);
   };
 });
-document.getElementById('regionSelect').onchange=()=>{ disableDuplicateCompactMode(); {
+document.getElementById('regionSelect').onchange=()=>{
   const regionSelect = document.getElementById('regionSelect');
   const citySelect = document.getElementById('citySelect');
   const dongSelect = document.getElementById('dongSelect');
@@ -1335,12 +1187,12 @@ document.getElementById('regionSelect').onchange=()=>{ disableDuplicateCompactMo
 
   applyFilter(true);
 };
-document.getElementById('citySelect').onchange=()=>{ disableDuplicateCompactMode(); {duplicateMode=false;
-disableDuplicateCompactMode();const db=document.getElementById('densityBtn');if(db)db.classList.remove('active');refreshDongOptions();applyFilter(true);};
+document.getElementById('citySelect').onchange=()=>{duplicateMode=false;const db=document.getElementById('densityBtn');if(db)db.classList.remove('active');refreshDongOptions();applyFilter(true);};
 document.getElementById('dongSelect').onchange=()=>applyFilter(true);
 document.getElementById('searchBtn').onclick=()=>applyFilter(true);
 document.getElementById('searchInput').addEventListener('keydown',e=>{if(e.key==='Enter')applyFilter(true);});
-document.getElementById('resetBtn').onclick=()=>{document.getElementById('searchInput').value='';document.getElementById('regionSelect').value='';document.getElementById('citySelect').value='';document.getElementById('dongSelect').value='';selectedLayers=new Set([]);document.querySelectorAll('.layerBtn').forEach(b=>b.classList.remove('active'));applyFilter(false);renderList([]);map.setCenter(new kakao.maps.LatLng(36.35,127.8));map.setLevel(13);clearInfo();const searchCountBox=document.getElementById('searchCountBox');if(searchCountBox)searchCountBox.textContent='';};
+document.getElementById('resetBtn').onclick=()=>{
+  disableDuplicateCompactMode();document.getElementById('searchInput').value='';document.getElementById('regionSelect').value='';document.getElementById('citySelect').value='';document.getElementById('dongSelect').value='';selectedLayers=new Set([]);document.querySelectorAll('.layerBtn').forEach(b=>b.classList.remove('active'));applyFilter(false);renderList([]);map.setCenter(new kakao.maps.LatLng(36.35,127.8));map.setLevel(13);clearInfo();const searchCountBox=document.getElementById('searchCountBox');if(searchCountBox)searchCountBox.textContent='';};
 
 // Distance tool
 
@@ -1486,14 +1338,14 @@ document.getElementById('distanceBtn').onclick = () => {
   if (distanceMode) {
     map.setDraggable(true);
     map.setZoomable(true);
-    exitDistanceMode('거리재기 OFF');
+    exitDistanceMode();
     return;
   }
 
   resetDistanceObjects();
   clearInfo();
   distanceMode = true;
-try{document.getElementById('distanceBtn').textContent='거리재기 ON';}catch(e){}
+  document.getElementById('distanceBtn').textContent='거리재기 ON';
   document.getElementById('distanceBtn').classList.add('active');
   document.getElementById('distanceBox').classList.add('show');
   document.getElementById('distanceBox').textContent = '시작점을 클릭해줘';
@@ -1503,7 +1355,7 @@ document.getElementById('distanceClearBtn').onclick = () => {
   resetDistanceObjects();
   map.setDraggable(true);
   map.setZoomable(true);
-  exitDistanceMode('거리 초기화 완료 · 지도 조작 가능');
+  exitDistanceMode();
 };
 
 const densityBtn = document.getElementById('densityBtn');
@@ -1544,6 +1396,7 @@ kakao.maps.event.addListener(map,'click',function(mouseEvent){
   }
 
   clearInfo();
+  disableDuplicateCompactMode();
 
   if (window.innerWidth <= 768) {
     document.getElementById('sidebar').classList.remove('open');
@@ -1554,7 +1407,7 @@ document.getElementById('mobileToggle').onclick=()=>document.getElementById('sid
 
 function exitDistanceModeForUi() {
   if (distanceMode) {
-    exitDistanceMode('거리재기 종료 · 지도 조작 가능');
+    exitDistanceMode();
   }
 }
 
