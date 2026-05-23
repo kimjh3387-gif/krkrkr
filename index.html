@@ -600,6 +600,54 @@ color:#fff;
   }
 }
 
+
+/* ===== DISTANCE / HUD / NO-MOVE PATCH ===== */
+.distanceBox{
+  pointer-events:none !important;
+}
+@media(max-width:768px){
+  body.duplicate-list-mode #distanceClearBtn{
+    display:block !important;
+    position:fixed !important;
+    right:14px !important;
+    bottom:78px !important;
+    z-index:10000 !important;
+    width:auto !important;
+    min-width:86px !important;
+    padding:10px 12px !important;
+    border-radius:999px !important;
+    background:rgba(15,23,42,.86) !important;
+    border:1px solid rgba(147,197,253,.35) !important;
+    color:#fff !important;
+    box-shadow:0 8px 24px rgba(0,0,0,.25) !important;
+  }
+  .distanceBox{
+    left:50% !important;
+    right:auto !important;
+    top:auto !important;
+    bottom:90px !important;
+    transform:translateX(-50%) !important;
+    max-width:calc(100vw - 40px) !important;
+    white-space:nowrap !important;
+  }
+}
+
+/* HUD slim override */
+.mapTopHud{
+  width:360px !important;
+  min-height:156px !important;
+  background:linear-gradient(135deg,rgba(15,23,42,.78),rgba(30,64,175,.58)) !important;
+  border-color:rgba(147,197,253,.20) !important;
+  box-shadow:0 10px 24px rgba(0,0,0,.22) !important;
+}
+@media(max-width:768px){
+  .mapTopHud{
+    width:auto !important;
+    min-height:auto !important;
+    background:linear-gradient(135deg,rgba(15,23,42,.76),rgba(30,64,175,.55)) !important;
+  }
+}
+
 </style>
 
 
@@ -1018,12 +1066,7 @@ function showDuplicateAddressGroups(){
     areaName: '중복주소',
     data: flatList
   });
-
-  if(flatList.length){
-    const first = flatList[0];
-    map.setCenter(new kakao.maps.LatLng(first.lat, first.lng));
-    map.setLevel(7);
-  }
+  // 집단상가 표시 시 지도 위치는 유지
 }
 
 function buildMarkers(data){
@@ -1307,7 +1350,7 @@ document.getElementById('regionSelect').onchange = () => {
     refreshDongOptions();
   }
 
-  applyFilter(true);
+  applyFilter(false);
 };
 
 document.getElementById('citySelect').onchange = () => {
@@ -1317,12 +1360,12 @@ document.getElementById('citySelect').onchange = () => {
   if(db) db.classList.remove('active');
 
   refreshDongOptions();
-  applyFilter(true);
+  applyFilter(false);
 };
 
 document.getElementById('dongSelect').onchange = () => {
   disableDuplicateCompactMode();
-  applyFilter(true);
+  applyFilter(false);
 };
 
 document.getElementById('searchBtn').onclick = () => {
@@ -1401,9 +1444,21 @@ function resetDistanceObjects(){
 
 function exitDistanceMode(message){
   distanceMode = false;
-  document.getElementById('distanceBtn').classList.remove('active');
-  document.getElementById('distanceBox').classList.add('show');
-  document.getElementById('distanceBox').textContent = message || '거리재기 OFF';
+
+  const btn = document.getElementById('distanceBtn');
+  if(btn){
+    btn.textContent = '거리재기';
+    btn.classList.remove('active');
+  }
+
+  const box = document.getElementById('distanceBox');
+  if(box){
+    box.classList.remove('show');
+    box.textContent = '';
+  }
+
+  map.setDraggable(true);
+  map.setZoomable(true);
 }
 
 function drawDistance(){
@@ -1496,23 +1551,37 @@ document.getElementById('distanceBtn').onclick = () => {
   if (distanceMode) {
     map.setDraggable(true);
     map.setZoomable(true);
-    exitDistanceMode('거리재기 OFF · 측정선은 유지됨');
+    exitDistanceMode();
     return;
   }
 
   resetDistanceObjects();
   clearInfo();
   distanceMode = true;
-  document.getElementById('distanceBtn').classList.add('active');
-  document.getElementById('distanceBox').classList.add('show');
-  document.getElementById('distanceBox').textContent = '시작점을 클릭해줘';
+  const distanceBtnEl = document.getElementById('distanceBtn');
+  if(distanceBtnEl){
+    distanceBtnEl.textContent='거리재기 ON';
+    distanceBtnEl.classList.add('active');
+  }
+
+  const distanceBoxEl = document.getElementById('distanceBox');
+  if(distanceBoxEl){
+    distanceBoxEl.textContent='거리재기 ON';
+    distanceBoxEl.classList.add('show');
+    setTimeout(()=>{
+      if(distanceMode && distanceBoxEl.textContent === '거리재기 ON'){
+        distanceBoxEl.classList.remove('show');
+        distanceBoxEl.textContent='';
+      }
+    }, 1200);
+  }
 };
 
 document.getElementById('distanceClearBtn').onclick = () => {
   resetDistanceObjects();
   map.setDraggable(true);
   map.setZoomable(true);
-  exitDistanceMode('거리 초기화 완료 · 지도 조작 가능');
+  exitDistanceMode();
 };
 
 const densityBtn = document.getElementById('densityBtn');
@@ -1564,7 +1633,7 @@ document.getElementById('mobileToggle').onclick=()=>document.getElementById('sid
 
 function exitDistanceModeForUi() {
   if (distanceMode) {
-    exitDistanceMode('거리재기 종료 · 지도 조작 가능');
+    exitDistanceMode();
   }
 }
 
