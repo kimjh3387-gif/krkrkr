@@ -1382,9 +1382,12 @@ function resetDistanceObjects(){
 
 function exitDistanceMode(message){
   distanceMode = false;
-  try{document.getElementById('distanceBtn').textContent='거리재기';}catch(e){}
+
   const btn = document.getElementById('distanceBtn');
-  if(btn) btn.classList.remove('active');
+  if(btn){
+    btn.textContent = '거리재기';
+    btn.classList.remove('active');
+  }
 
   const box = document.getElementById('distanceBox');
   if(box){
@@ -1483,7 +1486,7 @@ document.getElementById('distanceBtn').onclick = () => {
   if (distanceMode) {
     map.setDraggable(true);
     map.setZoomable(true);
-    exitDistanceMode('');
+    exitDistanceMode('거리재기 OFF');
     return;
   }
 
@@ -1551,7 +1554,7 @@ document.getElementById('mobileToggle').onclick=()=>document.getElementById('sid
 
 function exitDistanceModeForUi() {
   if (distanceMode) {
-    exitDistanceMode('');
+    exitDistanceMode('거리재기 종료 · 지도 조작 가능');
   }
 }
 
