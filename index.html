@@ -514,6 +514,7 @@ const markerImages={"SKT": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3
 const layerColors={"SKT":"#dc2626","KT":"#111827","LGU+":"#db2777","판매점":"#0284c7"};
 let duplicateMode=false;const db=document.getElementById('densityBtn');if(db)db.classList.remove('active');selectedLayers=new Set([]);
 let visibleData=[];
+let filterHudLockUntil=0;
 let activeInfo=null;
 let allInfos=[];
 let markers=[];
@@ -567,6 +568,45 @@ function makeInfo(store){
 
 
 
+
+
+function normalizeStoreData(){
+  storeData.forEach(v=>{
+    const name = String(v.name || "");
+
+    // KT 플라자 사직종합운동장점 강제 보정
+    if(
+      name.includes("KT 플라자 사직종합운동장점") ||
+      name.includes("KT플라자 사직종합운동장점")
+    ){
+      v.sido = "부산광역시";
+      v.city = "동래구";
+
+      if(v.addr){
+        v.addr = String(v.addr)
+          .replace(/부산시/g, "부산광역시")
+          .replace(/부산광영시/g, "부산광역시")
+          .replace(/부산시\s*부산광역시/g, "부산광역시");
+      }
+    }
+
+    // KT플라자 화명역점 강제 보정
+    if(
+      name.includes("KT플라자 화명역점") ||
+      name.includes("KT 플라자 화명역점")
+    ){
+      v.sido = "부산광역시";
+      v.city = "북구";
+
+      if(v.addr){
+        v.addr = String(v.addr)
+          .replace(/부산시/g, "부산광역시")
+          .replace(/부산광영시/g, "부산광역시")
+          .replace(/부산시\s*부산광역시/g, "부산광역시");
+      }
+    }
+  });
+}
 
 function updateMapTopHud(count, selectedStore=null, summary=null){
   const hud = document.getElementById('mapTopHud');
@@ -925,24 +965,72 @@ function buildSidoButtons(){ return; }
 
 function applyFilter(center=false){
 
-  refreshRegionOptions();refreshCityOptions();buildSidoButtons();buildSidoButtons();
-  visibleData=filterData();buildMarkers(visibleData);
-  const f=currentFilters();const has=f.keyword||f.region||f.city||f.dong;
-  renderList(has?visibleData:[]);
+  refreshRegionOptions();
+  refreshCityOptions();
+  buildSidoButtons();
+  buildSidoButtons();
+
+  visibleData = filterData();
+  buildMarkers(visibleData);
+
+  const f = currentFilters();
+  const has = f.keyword || f.region || f.city || f.dong;
+
+  renderList(has ? visibleData : []);
+
+  updateStat(labelFor(visibleData), visibleData.length);
 
   const searchCountBox = document.getElementById('searchCountBox');
-  const searchInput = document.getElementById('searchInput');
-  if(searchCountBox){
-    const q = searchInput ? searchInput.value.trim() : '';
-    if(q){
-      searchCountBox.textContent = `검색 결과 : ${q} ${visibleData.length.toLocaleString()}개`;
-    }else{
-      searchCountBox.textContent = '';
-    }
+
+  let filterTitle = '통신시장 유통망 현황';
+  let filterSubtitle = '전국 기준';
+  let filterAreaName = '전국';
+
+  if(f.city){
+    filterTitle = `${f.city} 유통망 현황`;
+    filterSubtitle = '시/군/구 필터 기준';
+    filterAreaName = f.city;
+  }else if(f.region){
+    filterTitle = `${f.region} 유통망 현황`;
+    filterSubtitle = '시/도 필터 기준';
+    filterAreaName = f.region;
+  }else if(f.keyword){
+    filterTitle = '검색 결과';
+    filterSubtitle = f.keyword;
+    filterAreaName = '검색';
   }
-  updateStat(labelFor(visibleData),visibleData.length);updateMapTopHud(visibleData.length);
-  if(center&&visibleData.length){map.setCenter(new kakao.maps.LatLng(visibleData[0].lat,visibleData[0].lng));map.setLevel(5);}
+
+  if(f.keyword){
+    if(searchCountBox) searchCountBox.textContent = `검색 결과 : ${f.keyword} ${visibleData.length.toLocaleString()}개`;
+    updateMapTopHud(visibleData.length, null, {
+      title: filterTitle,
+      subtitle: filterSubtitle,
+      areaName: filterAreaName,
+      data: visibleData
+    });
+  }else if(f.city || f.region){
+    const label = f.city || f.region;
+    if(searchCountBox) searchCountBox.textContent = `선택 지역 : ${label} ${visibleData.length.toLocaleString()}개`;
+
+    filterHudLockUntil = Date.now() + 1800;
+
+    updateMapTopHud(visibleData.length, null, {
+      title: filterTitle,
+      subtitle: filterSubtitle,
+      areaName: filterAreaName,
+      data: visibleData
+    });
+  }else{
+    if(searchCountBox) searchCountBox.textContent = '';
+    updateMapTopHud(visibleData.length);
+  }
+
+  if(center && visibleData.length){
+    map.setCenter(new kakao.maps.LatLng(visibleData[0].lat, visibleData[0].lng));
+    map.setLevel(5);
+  }
 }
+
 function syncFiltersFromStore(store, rebuild=true){
   lastStoreSelectAt = Date.now();
   document.getElementById('regionSelect').value=store.sido||"";refreshCityOptions();
@@ -1042,7 +1130,7 @@ document.getElementById('regionSelect').onchange=()=>{
 
   applyFilter(true);
 };
-document.getElementById('citySelect').onchange=()=>{refreshDongOptions();applyFilter(true);};
+document.getElementById('citySelect').onchange=()=>{duplicateMode=false;const db=document.getElementById('densityBtn');if(db)db.classList.remove('active');refreshDongOptions();applyFilter(true);};
 document.getElementById('dongSelect').onchange=()=>applyFilter(true);
 document.getElementById('searchBtn').onclick=()=>applyFilter(true);
 document.getElementById('searchInput').addEventListener('keydown',e=>{if(e.key==='Enter')applyFilter(true);});
@@ -1218,10 +1306,10 @@ if(nationalShareBtn){
     if(typeof updateViewportHud === 'function'){
       updateViewportHud();
     }else{
-      const data = (visibleData || []).filter(v=>{
-        const bounds = map.getBounds();
-        return bounds.contain(new kakao.maps.LatLng(v.lat, v.lng));
-      });
+      const bounds = map.getBounds();
+      const data = (visibleData || []).filter(v =>
+        v.lat && v.lng && bounds.contain(new kakao.maps.LatLng(v.lat, v.lng))
+      );
 
       updateMapTopHud(data.length, null, {
         title: '현재 화면 유통점 현황',
@@ -1273,6 +1361,7 @@ function storesInCurrentViewport(){
 }
 
 function updateViewportHud(){
+  if(Date.now() < filterHudLockUntil) return;
   if(Date.now() - lastStoreSelectAt < 2500) return;
 
   const data = storesInCurrentViewport();
@@ -1306,6 +1395,7 @@ async function initDashboard(){
     if (!res.ok) throw new Error("데이터 파일 로딩 실패: " + res.status);
 
     storeData = await res.json();
+    normalizeStoreData();
 
     applyFilter(false);
     renderList([]);
@@ -1440,6 +1530,14 @@ function setupMobileHudToggle(){
 
 setupMobileHudToggle();
 
+
+
+// ===== FILTER HUD TO VIEWPORT SWITCH =====
+kakao.maps.event.addListener(map, 'idle', function(){
+  if(typeof updateViewportHud === 'function'){
+    setTimeout(updateViewportHud, 120);
+  }
+});
 
 initDashboard();
 
