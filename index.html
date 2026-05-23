@@ -647,6 +647,11 @@ color:#fff;
   }
 }
 
+
+@keyframes fadeToast{
+  from{opacity:0;transform:translateX(-50%) translateY(10px);}
+  to{opacity:1;transform:translateX(-50%) translateY(0);}
+}
 </style>
 
 
@@ -693,7 +698,7 @@ window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);
   <input type="text" class="search" id="searchInput" placeholder="상호 · 주소 검색">
   <div class="btnRow"><button class="actionBtn" id="searchBtn">검색</button><button class="actionBtn reset" id="resetBtn">초기화</button></div>
   <div class="searchCountBox" id="searchCountBox"></div>
-  <div class="toolGrid"><button class="toolBtn" id="distanceBtn">거리재기</button><button class="toolBtn" id="distanceClearBtn">거리초기화</button><button class="toolBtn" id="densityBtn">집단상가</button><button class="toolBtn" id="nationalShareBtn">전국비중</button></div>
+  <div class="toolGrid"><button class="toolBtn" id="distanceBtn" id="distanceBtn">거리재기</button><button class="toolBtn" id="distanceClearBtn">거리초기화</button><button class="toolBtn" id="densityBtn">집단상가</button><button class="toolBtn" id="nationalShareBtn">전국비중</button></div>
 <div class="mapGuideText">
   <div>기준일자 : 2026-05-20</div>
   <div>출처 : KAIT · SKT · KT · LGU+</div>
@@ -721,6 +726,7 @@ let myLocationMarker=null;
 let myLocationCircle=null;
 let searchMarker=null;
 let distanceMode=false;
+try{document.getElementById('distanceBtn').textContent='거리재기';}catch(e){}
 let distancePoints=[];
 let distanceLine=null;
 let distanceLabels=[];
@@ -1376,6 +1382,7 @@ function resetDistanceObjects(){
 
 function exitDistanceMode(message){
   distanceMode = false;
+try{document.getElementById('distanceBtn').textContent='거리재기';}catch(e){}
   document.getElementById('distanceBtn').classList.remove('active');
   document.getElementById('distanceBox').classList.add('show');
   document.getElementById('distanceBox').textContent = message || '거리재기 OFF';
@@ -1471,13 +1478,14 @@ document.getElementById('distanceBtn').onclick = () => {
   if (distanceMode) {
     map.setDraggable(true);
     map.setZoomable(true);
-    exitDistanceMode('거리재기 OFF · 측정선은 유지됨');
+    exitDistanceMode('거리재기 OFF');
     return;
   }
 
   resetDistanceObjects();
   clearInfo();
   distanceMode = true;
+try{document.getElementById('distanceBtn').textContent='거리재기 ON';}catch(e){}
   document.getElementById('distanceBtn').classList.add('active');
   document.getElementById('distanceBox').classList.add('show');
   document.getElementById('distanceBox').textContent = '시작점을 클릭해줘';
