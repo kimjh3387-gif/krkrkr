@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>이미지 펴기 검수대</title>
+  <title>개인용 이미지 스캐너</title>
 
   <style>
     * { box-sizing: border-box; }
@@ -35,26 +35,38 @@
     }
 
     .toolbar,
-    .editbar {
+    .editbar,
+    .optionbar {
       position: sticky;
-      top: 0;
       z-index: 20;
       display: grid;
-      grid-template-columns: 1fr 1fr;
       gap: 8px;
       padding: 10px;
-      background: rgba(2, 6, 23, 0.92);
+      background: rgba(2, 6, 23, 0.93);
       backdrop-filter: blur(10px);
-      border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+      border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+    }
+
+    .toolbar {
+      top: 0;
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .optionbar {
+      top: 0;
+      grid-template-columns: 1fr 1fr;
+      padding-top: 0;
     }
 
     .editbar {
       display: none;
+      top: 0;
       grid-template-columns: 1fr 1fr 1fr;
     }
 
     button,
-    label {
+    label,
+    select {
       border: 1px solid rgba(148, 163, 184, 0.35);
       background: linear-gradient(180deg, #1f2937, #111827);
       color: #e5e7eb;
@@ -65,6 +77,12 @@
       text-align: center;
       cursor: pointer;
       user-select: none;
+    }
+
+    select {
+      width: 100%;
+      text-align: left;
+      appearance: none;
     }
 
     button.primary {
@@ -94,24 +112,77 @@
 
     input[type="file"] { display: none; }
 
-    .sortbar {
-      display: grid;
-      grid-template-columns: 1fr 110px;
-      gap: 8px;
-      padding: 0 10px 10px;
-      background: rgba(2, 6, 23, 0.92);
-      border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+    .status {
+      padding: 8px 14px;
+      color: #bae6fd;
+      font-size: 12px;
+      min-height: 18px;
     }
 
-    .sortbar select {
-      width: 100%;
-      border: 1px solid rgba(148, 163, 184, 0.35);
-      background: #111827;
-      color: #e5e7eb;
-      border-radius: 14px;
-      padding: 12px 10px;
+    .progress {
+      width: calc(100% - 20px);
+      height: 8px;
+      margin: 0 10px 8px;
+      background: #1e293b;
+      border-radius: 999px;
+      overflow: hidden;
+      display: none;
+    }
+
+    .progress > div {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #38bdf8, #22c55e);
+      transition: width 0.16s;
+    }
+
+    .review {
+      padding: 10px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .empty {
+      padding: 30px 14px;
+      color: #94a3b8;
+      text-align: center;
       font-size: 14px;
-      font-weight: 800;
+      line-height: 1.65;
+    }
+
+    .card {
+      background: #0f172a;
+      border: 1px solid rgba(148, 163, 184, 0.22);
+      border-radius: 18px;
+      overflow: hidden;
+      box-shadow: 0 10px 28px rgba(0,0,0,0.28);
+    }
+
+    .card-head {
+      padding: 10px 12px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 8px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+    }
+
+    .card-title {
+      font-size: 13px;
+      color: #cbd5e1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .chip {
+      font-size: 11px;
+      color: #93c5fd;
+      background: rgba(59, 130, 246, 0.14);
+      border: 1px solid rgba(59, 130, 246, 0.32);
+      border-radius: 999px;
+      padding: 4px 8px;
+      white-space: nowrap;
     }
 
     .image-wrap {
@@ -139,64 +210,6 @@
       z-index: 3;
     }
 
-    .time-chip {
-      font-size: 11px;
-      color: #93c5fd;
-      background: rgba(59, 130, 246, 0.14);
-      border: 1px solid rgba(59, 130, 246, 0.32);
-      border-radius: 999px;
-      padding: 4px 8px;
-      white-space: nowrap;
-    }
-
-    .status {
-      padding: 8px 14px;
-      color: #bae6fd;
-      font-size: 12px;
-      min-height: 18px;
-    }
-
-    .review {
-      padding: 10px;
-      display: grid;
-      gap: 12px;
-    }
-
-    .card {
-      background: #0f172a;
-      border: 1px solid rgba(148, 163, 184, 0.22);
-      border-radius: 18px;
-      overflow: hidden;
-      box-shadow: 0 10px 28px rgba(0,0,0,0.28);
-    }
-
-    .card-head {
-      padding: 10px 12px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 8px;
-      border-bottom: 1px solid rgba(148, 163, 184, 0.14);
-    }
-
-    .card-title {
-      font-size: 13px;
-      color: #cbd5e1;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .ok-badge {
-      font-size: 11px;
-      color: #bbf7d0;
-      background: rgba(34, 197, 94, 0.15);
-      border: 1px solid rgba(34, 197, 94, 0.35);
-      border-radius: 999px;
-      padding: 4px 8px;
-      white-space: nowrap;
-    }
-
     .card img {
       display: block;
       width: 100%;
@@ -206,7 +219,7 @@
     .card-actions {
       padding: 10px;
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: 1fr 1fr 1fr;
       gap: 8px;
     }
 
@@ -249,23 +262,16 @@
 
     #magnifier {
       position: fixed;
-      width: 135px;
-      height: 135px;
+      width: 80px;
+      height: 80px;
       border-radius: 50%;
-      border: 3px solid rgba(255,255,255,0.95);
+      border: 2px solid rgba(255,255,255,0.95);
       background: #000;
       z-index: 999;
       display: none;
       pointer-events: none;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.58);
+      box-shadow: 0 8px 22px rgba(0,0,0,0.55);
       overflow: hidden;
-    }
-
-    .hint {
-      padding: 8px 14px 16px;
-      color: #94a3b8;
-      font-size: 13px;
-      line-height: 1.55;
     }
 
     .save-view {
@@ -313,47 +319,29 @@
       user-select: auto;
     }
 
-    .empty {
-      padding: 26px 14px;
+    .hint {
+      padding: 8px 14px 18px;
       color: #94a3b8;
-      text-align: center;
-      font-size: 14px;
-      line-height: 1.6;
-    }
-
-    .progress {
-      width: calc(100% - 20px);
-      height: 8px;
-      margin: 0 10px 8px;
-      background: #1e293b;
-      border-radius: 999px;
-      overflow: hidden;
-      display: none;
-    }
-
-    .progress > div {
-      height: 100%;
-      width: 0%;
-      background: linear-gradient(90deg, #38bdf8, #22c55e);
-      transition: width 0.18s;
+      font-size: 13px;
+      line-height: 1.55;
     }
   </style>
 </head>
 
 <body>
 <header>
-  <h1>이미지 펴기 검수대</h1>
-  <div class="sub">여러 장 선택 → 시간순 정렬 → 번호 마킹 → 검수 → 사진 저장</div>
+  <h1>개인용 이미지 스캐너</h1>
+  <div class="sub">여러 장 선택 → 자동보정 → 검수 → JPG 한번에 저장/공유</div>
 </header>
 
 <div class="toolbar" id="mainToolbar">
   <label for="fileInput">사진 여러 장 선택</label>
   <button id="cameraBtn">카메라 촬영</button>
   <button id="clearBtn" class="danger" disabled>초기화</button>
-  <button id="savePhotosBtn" class="good" disabled>사진 저장 화면</button>
+  <button id="shareBtn" class="good" disabled>한번에 저장/공유</button>
 </div>
 
-<div class="sortbar" id="sortbar">
+<div class="optionbar" id="optionbar">
   <select id="sortMode">
     <option value="oldest">시간순: 오래된 사진 먼저</option>
     <option value="newest">시간순: 최신 사진 먼저</option>
@@ -361,6 +349,22 @@
     <option value="selected">선택한 순서</option>
   </select>
   <button id="resortBtn" disabled>재정렬</button>
+
+  <select id="filterMode">
+    <option value="auto" selected>보정필터: 자동보정</option>
+    <option value="original">보정필터: 원본</option>
+    <option value="bright">보정필터: 밝게</option>
+    <option value="gray">보정필터: 흑백</option>
+    <option value="deepgray">보정필터: 흑백 심화</option>
+    <option value="sharp">보정필터: 선명하게</option>
+    <option value="shadow">보정필터: 그림자 제거</option>
+  </select>
+
+  <select id="sizeMode">
+    <option value="high">고용량: 고화질 3000px / JPG 92%</option>
+    <option value="mid" selected>중용량: 표준 2000px / JPG 82%</option>
+    <option value="low">저용량: 카톡용 1200px / JPG 70%</option>
+  </select>
 </div>
 
 <div class="editbar" id="editToolbar">
@@ -386,15 +390,15 @@
 <div class="review" id="reviewList">
   <div class="empty">
     사진을 여러 장 선택하면 자동으로 문서 영역을 잡고,<br>
-    완료된 펴기 결과만 이곳에 쌓입니다.
+    JPG 완료본이 이곳에 쌓입니다.
   </div>
 </div>
 
 <div class="save-view" id="saveView"></div>
 
 <div class="hint">
-  사진은 시간 기준으로 정렬되고, 완료본 왼쪽 위에 번호가 표시됩니다.<br>
-  틀린 사진만 <b>수정</b>을 누르세요. 꼭짓점 이동 후 <b>수정 저장</b>하면 목록의 완료본이 교체됩니다.
+  보정필터나 용량을 바꾸면 현재 결과물이 다시 처리됩니다.<br>
+  틀린 사진만 <b>수정</b>을 눌러 꼭짓점을 조정한 뒤 <b>수정 저장</b>하세요.
 </div>
 
 <script async src="https://docs.opencv.org/4.x/opencv.js" onload="onOpenCvLoaded();"></script>
@@ -416,6 +420,7 @@
   };
 
   const mainToolbar = document.getElementById("mainToolbar");
+  const optionbar = document.getElementById("optionbar");
   const editToolbar = document.getElementById("editToolbar");
 
   const stageWrap = document.getElementById("stageWrap");
@@ -430,9 +435,12 @@
   const cameraInput = document.getElementById("cameraInput");
   const cameraBtn = document.getElementById("cameraBtn");
   const clearBtn = document.getElementById("clearBtn");
-  const savePhotosBtn = document.getElementById("savePhotosBtn");
+  const shareBtn = document.getElementById("shareBtn");
+
   const sortMode = document.getElementById("sortMode");
   const resortBtn = document.getElementById("resortBtn");
+  const filterMode = document.getElementById("filterMode");
+  const sizeMode = document.getElementById("sizeMode");
 
   const backBtn = document.getElementById("backBtn");
   const autoBtn = document.getElementById("autoBtn");
@@ -455,6 +463,12 @@
   let points = [];
   let dragging = -1;
 
+  const sizeProfiles = {
+    high: { maxSide: 3000, quality: 0.92 },
+    mid: { maxSide: 2000, quality: 0.82 },
+    low: { maxSide: 1200, quality: 0.70 }
+  };
+
   function setStatus(text) {
     statusEl.textContent = text;
   }
@@ -476,8 +490,8 @@
     canvas.style.height = r.height + "px";
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    magnifier.width = 135 * dpr;
-    magnifier.height = 135 * dpr;
+    magnifier.width = 80 * dpr;
+    magnifier.height = 80 * dpr;
     magCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     if (loaded) fitView();
@@ -486,6 +500,7 @@
 
   function showReviewMode() {
     mainToolbar.style.display = "grid";
+    optionbar.style.display = "grid";
     editToolbar.style.display = "none";
     stageWrap.style.display = "none";
     reviewList.style.display = "grid";
@@ -497,10 +512,10 @@
   function showEditMode(index) {
     editIndex = index;
     const item = items[index];
-
     if (!item) return;
 
     mainToolbar.style.display = "none";
+    optionbar.style.display = "none";
     editToolbar.style.display = "grid";
     stageWrap.style.display = "block";
     reviewList.style.display = "none";
@@ -537,10 +552,7 @@
   }
 
   function imgToScreen(p) {
-    return {
-      x: view.x + p.x * view.scale,
-      y: view.y + p.y * view.scale
-    };
+    return { x: view.x + p.x * view.scale, y: view.y + p.y * view.scale };
   }
 
   function screenToImg(x, y) {
@@ -596,14 +608,14 @@
   }
 
   function showMagnifier(touchX, touchY, imgPoint) {
-    const size = 135;
-    const zoom = 0.75;
+    const size = 80;
+    const zoom = 0.60;
     const sourceSize = size / zoom;
 
     let left = touchX - size / 2;
-    let top = touchY - size - 22;
+    let top = touchY - size - 18;
 
-    if (top < 10) top = touchY + 22;
+    if (top < 10) top = touchY + 18;
     if (left < 8) left = 8;
     if (left + size > window.innerWidth - 8) left = window.innerWidth - size - 8;
 
@@ -617,7 +629,7 @@
     magCtx.save();
 
     magCtx.beginPath();
-    magCtx.arc(size / 2, size / 2, size / 2 - 4, 0, Math.PI * 2);
+    magCtx.arc(size / 2, size / 2, size / 2 - 3, 0, Math.PI * 2);
     magCtx.clip();
 
     magCtx.fillStyle = "#000";
@@ -636,7 +648,7 @@
     );
 
     magCtx.strokeStyle = "rgba(255,255,255,0.95)";
-    magCtx.lineWidth = 1.5;
+    magCtx.lineWidth = 1;
 
     magCtx.beginPath();
     magCtx.moveTo(size / 2, 0);
@@ -655,7 +667,6 @@
   function getPos(e) {
     const r = canvas.getBoundingClientRect();
     const t = e.touches ? e.touches[0] : e;
-
     return {
       x: t.clientX - r.left,
       y: t.clientY - r.top,
@@ -697,7 +708,6 @@
 
     const p = getPos(e);
     points[dragging] = screenToImg(p.x, p.y);
-
     draw();
     showMagnifier(p.pageX, p.pageY, points[dragging]);
   }
@@ -725,7 +735,7 @@
     editIndex = -1;
     loaded = false;
     clearBtn.disabled = true;
-    savePhotosBtn.disabled = true;
+    shareBtn.disabled = true;
     resortBtn.disabled = true;
     setStatus("초기화 완료. 사진을 선택하세요.");
     showReviewMode();
@@ -738,6 +748,9 @@
     setStatus(`재정렬 완료: ${sortMode.options[sortMode.selectedIndex].text}`);
   });
 
+  filterMode.addEventListener("change", reprocessAllResults);
+  sizeMode.addEventListener("change", reprocessAllResults);
+
   backBtn.addEventListener("click", showReviewMode);
 
   autoBtn.addEventListener("click", () => {
@@ -746,19 +759,15 @@
     draw();
   });
 
-  saveEditBtn.addEventListener("click", () => {
+  saveEditBtn.addEventListener("click", async () => {
     if (editIndex < 0 || !items[editIndex]) return;
 
-    const result = makeDewarpDataUrl(points);
-    items[editIndex].points = points.map(p => ({ x: p.x, y: p.y }));
-    items[editIndex].resultDataUrl = result.dataUrl;
-    items[editIndex].resultBlob = result.blob;
-
+    await reprocessOneItem(editIndex, points);
     setStatus(`${editIndex + 1}번 수정 저장 완료.`);
     showReviewMode();
   });
 
-  savePhotosBtn.addEventListener("click", showSavePhotosView);
+  shareBtn.addEventListener("click", shareOrShowSaveView);
 
   async function processFiles(fileList) {
     const selected = Array.from(fileList || []);
@@ -767,7 +776,7 @@
     items = [];
     reviewList.innerHTML = "";
     clearBtn.disabled = true;
-    savePhotosBtn.disabled = true;
+    shareBtn.disabled = true;
     resortBtn.disabled = true;
     setProgress(true, 0);
 
@@ -780,22 +789,21 @@
       const item = await processOneFile(file, i);
       items.push(item);
       renumberItems();
-
       setProgress(true, Math.round(((i + 1) / orderedFiles.length) * 100));
       renderReviewList();
 
-      await sleep(60);
+      await sleep(40);
     }
 
-    setProgress(false, 0);
     sortItems();
     renumberItems();
     renderReviewList();
 
+    setProgress(false, 0);
     clearBtn.disabled = false;
-    savePhotosBtn.disabled = items.length === 0;
+    shareBtn.disabled = items.length === 0;
     resortBtn.disabled = items.length === 0;
-    setStatus(`${items.length}장 처리 완료. 번호 순서 확인 후 필요한 사진만 수정하세요.`);
+    setStatus(`${items.length}장 처리 완료. 필요한 사진만 수정하세요.`);
   }
 
   function sleep(ms) {
@@ -884,15 +892,52 @@
     const result = makeDewarpDataUrl(points);
 
     return {
-      name: file.name || `image_${index + 1}.png`,
+      name: file.name || `image_${index + 1}.jpg`,
       originalDataUrl,
       sourceTime: getFileTime(file),
       selectedOrder: index,
       number: index + 1,
       points: points.map(p => ({ x: p.x, y: p.y })),
       resultDataUrl: result.dataUrl,
-      resultBlob: result.blob
+      resultBlob: result.blob,
+      resultSize: result.blob.size
     };
+  }
+
+  async function reprocessAllResults() {
+    if (!items.length) return;
+
+    setProgress(true, 0);
+    setStatus("보정/용량 설정 반영 중...");
+
+    for (let i = 0; i < items.length; i++) {
+      await reprocessOneItem(i, items[i].points);
+      setProgress(true, Math.round(((i + 1) / items.length) * 100));
+      await sleep(20);
+    }
+
+    renderReviewList();
+    setProgress(false, 0);
+    setStatus("보정/용량 설정 반영 완료.");
+  }
+
+  async function reprocessOneItem(index, newPoints) {
+    const item = items[index];
+    if (!item) return;
+
+    const image = await loadImage(item.originalDataUrl);
+
+    img = image;
+    imageW = image.naturalWidth;
+    imageH = image.naturalHeight;
+    loaded = true;
+
+    const result = makeDewarpDataUrl(newPoints);
+
+    item.points = newPoints.map(p => ({ x: p.x, y: p.y }));
+    item.resultDataUrl = result.dataUrl;
+    item.resultBlob = result.blob;
+    item.resultSize = result.blob.size;
   }
 
   function renderReviewList() {
@@ -900,7 +945,7 @@
       reviewList.innerHTML = `
         <div class="empty">
           사진을 여러 장 선택하면 자동으로 문서 영역을 잡고,<br>
-          완료된 펴기 결과만 이곳에 쌓입니다.
+          JPG 완료본이 이곳에 쌓입니다.
         </div>
       `;
       return;
@@ -916,8 +961,7 @@
       title.className = "card-head";
       title.innerHTML = `
         <div class="card-title">${item.number}. ${escapeHtml(item.name)}</div>
-        <div class="time-chip">${formatTime(item.sourceTime)}</div>
-        <div class="ok-badge">완료</div>
+        <div class="chip">${formatBytes(item.resultSize || 0)}</div>
       `;
 
       const imageWrap = document.createElement("div");
@@ -942,13 +986,18 @@
       editBtn.textContent = "수정";
       editBtn.addEventListener("click", () => showEditMode(index));
 
+      const rotateBtn = document.createElement("button");
+      rotateBtn.textContent = "회전";
+      rotateBtn.addEventListener("click", () => rotateItem(index));
+
       const a = document.createElement("a");
       a.className = "download-one";
-      a.textContent = "개별 저장";
+      a.textContent = "저장";
       a.href = item.resultDataUrl;
       a.download = makeOutputName(item.name, index);
 
       actions.appendChild(editBtn);
+      actions.appendChild(rotateBtn);
       actions.appendChild(a);
 
       card.appendChild(title);
@@ -957,6 +1006,40 @@
 
       reviewList.appendChild(card);
     });
+  }
+
+  async function rotateItem(index) {
+    const item = items[index];
+    if (!item) return;
+
+    const image = await loadImage(item.originalDataUrl);
+    const rotatedDataUrl = rotateImageDataUrl(image);
+    item.originalDataUrl = rotatedDataUrl;
+
+    const newImage = await loadImage(rotatedDataUrl);
+    img = newImage;
+    imageW = newImage.naturalWidth;
+    imageH = newImage.naturalHeight;
+    loaded = true;
+
+    const newPoints = autoDetectDocumentPoints();
+    await reprocessOneItem(index, newPoints);
+
+    renderReviewList();
+    setStatus(`${index + 1}번 회전 후 재처리 완료.`);
+  }
+
+  function rotateImageDataUrl(image) {
+    const c = document.createElement("canvas");
+    c.width = image.naturalHeight;
+    c.height = image.naturalWidth;
+
+    const cctx = c.getContext("2d");
+    cctx.translate(c.width / 2, c.height / 2);
+    cctx.rotate(Math.PI / 2);
+    cctx.drawImage(image, -image.naturalWidth / 2, -image.naturalHeight / 2);
+
+    return c.toDataURL("image/jpeg", 0.92);
   }
 
   function escapeHtml(text) {
@@ -969,20 +1052,45 @@
     }[s]));
   }
 
+  function formatBytes(bytes) {
+    if (!bytes) return "-";
+    if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)}KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+  }
+
   function makeOutputName(name, index) {
     const item = items[index];
     const number = item?.number || index + 1;
     const safe = (name || `image_${number}`).replace(/\.[^.]+$/, "");
-    return `${String(number).padStart(3, "0")}_${safe}_dewarped.png`;
+    return `${String(number).padStart(3, "0")}_${safe}_scan.jpg`;
   }
 
-  function showSavePhotosView() {
+  async function shareOrShowSaveView() {
     if (!items.length) return;
+
+    try {
+      const shareFiles = items.map((item, index) => {
+        return new File([item.resultBlob], makeOutputName(item.name, index), { type: "image/jpeg" });
+      });
+
+      if (navigator.canShare && navigator.canShare({ files: shareFiles })) {
+        await navigator.share({
+          files: shareFiles,
+          title: "스캔 이미지",
+          text: "검수 완료된 JPG 이미지입니다."
+        });
+        setStatus("공유 시트를 열었습니다. 저장 위치를 선택하세요.");
+        return;
+      }
+    } catch (err) {
+      console.warn("share failed", err);
+    }
 
     reviewList.style.display = "none";
     stageWrap.style.display = "none";
     editToolbar.style.display = "none";
     mainToolbar.style.display = "grid";
+    optionbar.style.display = "grid";
 
     saveView.innerHTML = "";
     saveView.classList.add("show");
@@ -991,9 +1099,8 @@
     guide.className = "save-guide";
     guide.innerHTML = `
       <b>사진 저장 화면</b><br>
-      아이폰에서는 웹페이지가 사진앱에 여러 이미지를 자동 저장할 수 없습니다.<br>
-      아래 이미지들을 순서대로 <b>길게 누르기 → 사진에 저장</b> 하세요.
-      파일 순서는 번호 마킹과 동일합니다.
+      이 브라우저에서는 여러 장 자동 공유가 막혔습니다.<br>
+      아래 이미지를 순서대로 <b>길게 누르기 → 사진에 저장</b> 하세요.
     `;
     saveView.appendChild(guide);
 
@@ -1005,7 +1112,7 @@
       head.className = "save-photo-head";
       head.innerHTML = `
         <span>${item.number}. ${escapeHtml(item.name)}</span>
-        <span>${formatTime(item.sourceTime)}</span>
+        <span>${formatBytes(item.resultSize || 0)}</span>
       `;
 
       const image = document.createElement("img");
@@ -1159,9 +1266,7 @@
     const bh = maxY - minY;
     const areaRatio = (bw * bh) / (w * h);
 
-    if (count < 300 || bw < w * 0.25 || bh < h * 0.25 || areaRatio > 0.96) {
-      return null;
-    }
+    if (count < 300 || bw < w * 0.25 || bh < h * 0.25 || areaRatio > 0.96) return null;
 
     return expandPoints([
       { x: minX / scale, y: minY / scale },
@@ -1174,10 +1279,7 @@
   function matToPoints(mat) {
     const pts = [];
     for (let i = 0; i < mat.rows; i++) {
-      pts.push({
-        x: mat.data32S[i * 2],
-        y: mat.data32S[i * 2 + 1]
-      });
+      pts.push({ x: mat.data32S[i * 2], y: mat.data32S[i * 2 + 1] });
     }
     return pts;
   }
@@ -1264,31 +1366,154 @@
   function makeDewarpDataUrl(inputPoints) {
     const q = orderPoints(inputPoints);
 
-    const outW = Math.max(
-      100,
-      Math.round(Math.max(dist(q[0], q[1]), dist(q[3], q[2])))
-    );
+    let outW = Math.max(100, Math.round(Math.max(dist(q[0], q[1]), dist(q[3], q[2]))));
+    let outH = Math.max(100, Math.round(Math.max(dist(q[0], q[3]), dist(q[1], q[2]))));
 
-    const outH = Math.max(
-      100,
-      Math.round(Math.max(dist(q[0], q[3]), dist(q[1], q[2])))
-    );
+    const profile = sizeProfiles[sizeMode.value] || sizeProfiles.mid;
+    const longSide = Math.max(outW, outH);
+
+    if (longSide > profile.maxSide) {
+      const ratio = profile.maxSide / longSide;
+      outW = Math.round(outW * ratio);
+      outH = Math.round(outH * ratio);
+    }
 
     const out = document.createElement("canvas");
     out.width = outW;
     out.height = outH;
 
-    const octx = out.getContext("2d");
+    const octx = out.getContext("2d", { willReadFrequently: true });
     octx.fillStyle = "white";
     octx.fillRect(0, 0, outW, outH);
 
-    warpQuadToRect(octx, img, q, outW, outH, 64);
+    warpQuadToRect(octx, img, q, outW, outH, 48);
+    applyFilterToCanvas(out, filterMode.value);
 
-    const dataUrl = out.toDataURL("image/png");
+    const dataUrl = out.toDataURL("image/jpeg", profile.quality);
     const base64 = dataUrl.split(",")[1];
-    const blob = base64ToBlob(base64, "image/png");
+    const blob = base64ToBlob(base64, "image/jpeg");
 
     return { dataUrl, blob };
+  }
+
+  function applyFilterToCanvas(canvasEl, mode) {
+    if (mode === "original") return;
+
+    const c = canvasEl.getContext("2d", { willReadFrequently: true });
+    const imgData = c.getImageData(0, 0, canvasEl.width, canvasEl.height);
+    const data = imgData.data;
+
+    if (mode === "bright") {
+      adjustBrightnessContrast(data, 18, 1.12);
+    } else if (mode === "gray") {
+      grayscale(data, 1.22, 8);
+    } else if (mode === "deepgray") {
+      deepBlackWhite(data);
+    } else if (mode === "sharp") {
+      adjustBrightnessContrast(data, 8, 1.18);
+      c.putImageData(imgData, 0, 0);
+      sharpenCanvas(canvasEl);
+      return;
+    } else if (mode === "shadow") {
+      normalizeShadow(data, canvasEl.width, canvasEl.height);
+    } else {
+      autoEnhance(data);
+    }
+
+    c.putImageData(imgData, 0, 0);
+  }
+
+  function adjustBrightnessContrast(data, brightness, contrast) {
+    for (let i = 0; i < data.length; i += 4) {
+      data[i] = clamp((data[i] - 128) * contrast + 128 + brightness, 0, 255);
+      data[i + 1] = clamp((data[i + 1] - 128) * contrast + 128 + brightness, 0, 255);
+      data[i + 2] = clamp((data[i + 2] - 128) * contrast + 128 + brightness, 0, 255);
+    }
+  }
+
+  function grayscale(data, contrast = 1, brightness = 0) {
+    for (let i = 0; i < data.length; i += 4) {
+      let v = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+      v = clamp((v - 128) * contrast + 128 + brightness, 0, 255);
+      data[i] = data[i + 1] = data[i + 2] = v;
+    }
+  }
+
+  function deepBlackWhite(data) {
+    for (let i = 0; i < data.length; i += 4) {
+      const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+      const v = gray > 162 ? 255 : 0;
+      data[i] = data[i + 1] = data[i + 2] = v;
+    }
+  }
+
+  function autoEnhance(data) {
+    for (let i = 0; i < data.length; i += 4) {
+      let r = data[i], g = data[i + 1], b = data[i + 2];
+      r = clamp((r - 128) * 1.16 + 145, 0, 255);
+      g = clamp((g - 128) * 1.16 + 145, 0, 255);
+      b = clamp((b - 128) * 1.16 + 145, 0, 255);
+      data[i] = r;
+      data[i + 1] = g;
+      data[i + 2] = b;
+    }
+  }
+
+  function normalizeShadow(data, w, h) {
+    const sampleStep = 12;
+    let total = 0;
+    let count = 0;
+
+    for (let y = 0; y < h; y += sampleStep) {
+      for (let x = 0; x < w; x += sampleStep) {
+        const i = (y * w + x) * 4;
+        total += (data[i] + data[i + 1] + data[i + 2]) / 3;
+        count++;
+      }
+    }
+
+    const avg = total / Math.max(1, count);
+
+    for (let i = 0; i < data.length; i += 4) {
+      const gray = (data[i] + data[i + 1] + data[i + 2]) / 3;
+      const boost = avg - gray;
+      let v = gray + boost * 0.35;
+      v = clamp((v - 128) * 1.22 + 155, 0, 255);
+      data[i] = data[i + 1] = data[i + 2] = v;
+    }
+  }
+
+  function sharpenCanvas(canvasEl) {
+    const c = canvasEl.getContext("2d", { willReadFrequently: true });
+    const src = c.getImageData(0, 0, canvasEl.width, canvasEl.height);
+    const dst = c.createImageData(src.width, src.height);
+    const w = src.width;
+    const h = src.height;
+    const s = src.data;
+    const d = dst.data;
+
+    const kernel = [0, -1, 0, -1, 5, -1, 0, -1, 0];
+
+    for (let y = 1; y < h - 1; y++) {
+      for (let x = 1; x < w - 1; x++) {
+        for (let cidx = 0; cidx < 3; cidx++) {
+          let val = 0;
+          let k = 0;
+
+          for (let ky = -1; ky <= 1; ky++) {
+            for (let kx = -1; kx <= 1; kx++) {
+              const idx = ((y + ky) * w + (x + kx)) * 4 + cidx;
+              val += s[idx] * kernel[k++];
+            }
+          }
+
+          d[(y * w + x) * 4 + cidx] = clamp(val, 0, 255);
+        }
+        d[(y * w + x) * 4 + 3] = 255;
+      }
+    }
+
+    c.putImageData(dst, 0, 0);
   }
 
   function base64ToBlob(base64, type) {
