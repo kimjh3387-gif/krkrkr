@@ -95,10 +95,10 @@
 
     #magnifier {
       position: fixed;
-      width: 150px;
-      height: 150px;
+      width: 130px;
+      height: 130px;
       border-radius: 50%;
-      border: 4px solid #facc15;
+      border: 3px solid #facc15;
       background: #000;
       z-index: 999;
       display: none;
@@ -168,8 +168,8 @@
 <canvas id="magnifier"></canvas>
 
 <div class="hint">
-  노란 점을 손가락으로 움직이면 확대창이 뜬다.<br>
-  사진 선택 시 자동으로 영역을 잡지만, 안 맞으면 네 귀퉁이를 직접 맞추면 됨.
+  노란 점을 손가락으로 움직이면 작은 확대창이 뜬다.<br>
+  사진 선택 시 화면 안의 A4/문서처럼 보이는 밝은 사각 영역의 끝을 자동으로 잡는다.
 </div>
 
 <div class="result-box" id="resultBox">
@@ -215,8 +215,8 @@
     canvas.style.height = r.height + "px";
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    magnifier.width = 150 * dpr;
-    magnifier.height = 150 * dpr;
+    magnifier.width = 130 * dpr;
+    magnifier.height = 130 * dpr;
     magCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     if (loaded) fitView();
@@ -226,7 +226,10 @@
   function fitView() {
     const r = stage.getBoundingClientRect();
     const pad = 12;
-    const scale = Math.min((r.width - pad * 2) / imageW, (r.height - pad * 2) / imageH);
+    const scale = Math.min(
+      (r.width - pad * 2) / imageW,
+      (r.height - pad * 2) / imageH
+    );
 
     view.scale = scale;
     view.w = imageW * scale;
@@ -300,17 +303,21 @@
   }
 
   function showMagnifier(touchX, touchY, imgPoint) {
-    const size = 150;
-    const zoom = 3.2;
+    const size = 130;
+    const zoom = 1.8;
     const sourceSize = size / zoom;
 
     let left = touchX - size / 2;
-    let top = touchY - size - 35;
+    let top = touchY - size - 28;
 
-    if (top < 10) top = touchY + 35;
+    if (top < 10) top = touchY + 28;
     if (left < 8) left = 8;
-    if (left + size > window.innerWidth - 8) left = window.innerWidth - size - 8;
+    if (left + size > window.innerWidth - 8) {
+      left = window.innerWidth - size - 8;
+    }
 
+    magnifier.style.width = size + "px";
+    magnifier.style.height = size + "px";
     magnifier.style.left = left + "px";
     magnifier.style.top = top + "px";
     magnifier.style.display = "block";
@@ -339,6 +346,7 @@
 
     magCtx.strokeStyle = "#facc15";
     magCtx.lineWidth = 2;
+
     magCtx.beginPath();
     magCtx.moveTo(size / 2, 0);
     magCtx.lineTo(size / 2, size);
@@ -457,7 +465,7 @@
   });
 
   function autoDetectDocumentPoints() {
-    const maxSide = 520;
+    const maxSide = 720;
     const scale = Math.min(maxSide / imageW, maxSide / imageH, 1);
     const w = Math.round(imageW * scale);
     const h = Math.round(imageH * scale);
@@ -469,34 +477,83 @@
     const tctx = temp.getContext("2d", { willReadFrequently: true });
     tctx.drawImage(img, 0, 0, w, h);
 
-    const data = tctx.getImageData(0, 0, w, h).data;
+    const src = tctx.getImageData(0, 0, w, h);
+    const data = src.data;
 
-    let minX = w, minY = h, maxX = 0, maxY = 0;
-    let found = false;
+    let mask = new Uint8Array(w * h);
 
-    for (let y = 0; y < h; y += 2) {
-      for (let x = 0; x < w; x += 2) {
-        const idx = (y * w + x) * 4;
-        const r = data[idx];
-        const g = data[idx + 1];
-        const b = data[idx + 2];
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const i = (y * w + x) * 4;
+        const r = data[i];
+        const g = data[i + 1];
+        const b = data[i + 2];
 
         const brightness = (r + g + b) / 3;
-        const diff = Math.max(r, g, b) - Math.min(r, g, b);
+        const colorDiff = Math.max(r, g, b) - Math.min(r, g, b);
 
-        if (brightness > 105 && diff < 95) {
-          minX = Math.min(minX, x);
-          minY = Math.min(minY, y);
-          maxX = Math.max(maxX, x);
-          maxY = Math.max(maxY, y);
-          found = true;
+        if (brightness > 135 && colorDiff < 80) {
+          mask[y * w + x] = 1;
         }
       }
     }
 
-    if (!found || maxX - minX < w * 0.25 || maxY - minY < h * 0.25) {
-      const mx = imageW * 0.06;
-      const my = imageH * 0.06;
+    const rowCount = new Array(h).fill(0);
+    const colCount = new Array(w).fill(0);
+
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        if (mask[y * w + x]) {
+          rowCount[y]++;
+          colCount[x]++;
+        }
+      }
+    }
+
+    const rowThreshold = w * 0.18;
+    const colThreshold = h * 0.18;
+
+    let top = -1;
+    let bottom = -1;
+    let left = -1;
+    let right = -1;
+
+    for (let y = 0; y < h; y++) {
+      if (rowCount[y] > rowThreshold) {
+        top = y;
+        break;
+      }
+    }
+
+    for (let y = h - 1; y >= 0; y--) {
+      if (rowCount[y] > rowThreshold) {
+        bottom = y;
+        break;
+      }
+    }
+
+    for (let x = 0; x < w; x++) {
+      if (colCount[x] > colThreshold) {
+        left = x;
+        break;
+      }
+    }
+
+    for (let x = w - 1; x >= 0; x--) {
+      if (colCount[x] > colThreshold) {
+        right = x;
+        break;
+      }
+    }
+
+    if (
+      top < 0 || bottom < 0 || left < 0 || right < 0 ||
+      right - left < w * 0.35 ||
+      bottom - top < h * 0.35
+    ) {
+      const mx = imageW * 0.05;
+      const my = imageH * 0.05;
+
       return [
         { x: mx, y: my },
         { x: imageW - mx, y: my },
@@ -505,19 +562,28 @@
       ];
     }
 
-    const padX = (maxX - minX) * 0.025;
-    const padY = (maxY - minY) * 0.025;
+    const detectedW = right - left;
+    const detectedH = bottom - top;
+    const ratio = detectedH / detectedW;
 
-    minX = clamp(minX - padX, 0, w);
-    minY = clamp(minY - padY, 0, h);
-    maxX = clamp(maxX + padX, 0, w);
-    maxY = clamp(maxY + padY, 0, h);
+    let padX = detectedW * 0.015;
+    let padY = detectedH * 0.015;
+
+    if (ratio > 1.15 && ratio < 1.65) {
+      padX = detectedW * 0.025;
+      padY = detectedH * 0.025;
+    }
+
+    left = clamp(left - padX, 0, w);
+    right = clamp(right + padX, 0, w);
+    top = clamp(top - padY, 0, h);
+    bottom = clamp(bottom + padY, 0, h);
 
     return [
-      { x: minX / scale, y: minY / scale },
-      { x: maxX / scale, y: minY / scale },
-      { x: maxX / scale, y: maxY / scale },
-      { x: minX / scale, y: maxY / scale }
+      { x: left / scale, y: top / scale },
+      { x: right / scale, y: top / scale },
+      { x: right / scale, y: bottom / scale },
+      { x: left / scale, y: bottom / scale }
     ];
   }
 
@@ -572,13 +638,17 @@
 
   function indexMin(a) {
     let idx = 0;
-    for (let i = 1; i < a.length; i++) if (a[i] < a[idx]) idx = i;
+    for (let i = 1; i < a.length; i++) {
+      if (a[i] < a[idx]) idx = i;
+    }
     return idx;
   }
 
   function indexMax(a) {
     let idx = 0;
-    for (let i = 1; i < a.length; i++) if (a[i] > a[idx]) idx = i;
+    for (let i = 1; i < a.length; i++) {
+      if (a[i] > a[idx]) idx = i;
+    }
     return idx;
   }
 
@@ -588,8 +658,16 @@
 
   function bilinear(tl, tr, br, bl, u, v) {
     return {
-      x: tl.x * (1 - u) * (1 - v) + tr.x * u * (1 - v) + br.x * u * v + bl.x * (1 - u) * v,
-      y: tl.y * (1 - u) * (1 - v) + tr.y * u * (1 - v) + br.y * u * v + bl.y * (1 - u) * v
+      x:
+        tl.x * (1 - u) * (1 - v) +
+        tr.x * u * (1 - v) +
+        br.x * u * v +
+        bl.x * (1 - u) * v,
+      y:
+        tl.y * (1 - u) * (1 - v) +
+        tr.y * u * (1 - v) +
+        br.y * u * v +
+        bl.y * (1 - u) * v
     };
   }
 
@@ -645,19 +723,44 @@
     const dx1 = d1.x, dy1 = d1.y;
     const dx2 = d2.x, dy2 = d2.y;
 
-    const denom = sx0 * (sy1 - sy2) + sx1 * (sy2 - sy0) + sx2 * (sy0 - sy1);
+    const denom =
+      sx0 * (sy1 - sy2) +
+      sx1 * (sy2 - sy0) +
+      sx2 * (sy0 - sy1);
 
     if (Math.abs(denom) < 0.000001) {
       return { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 };
     }
 
-    const a = (dx0 * (sy1 - sy2) + dx1 * (sy2 - sy0) + dx2 * (sy0 - sy1)) / denom;
-    const c = (dx0 * (sx2 - sx1) + dx1 * (sx0 - sx2) + dx2 * (sx1 - sx0)) / denom;
-    const e = (dx0 * (sx1 * sy2 - sx2 * sy1) + dx1 * (sx2 * sy0 - sx0 * sy2) + dx2 * (sx0 * sy1 - sx1 * sy0)) / denom;
+    const a =
+      (dx0 * (sy1 - sy2) +
+       dx1 * (sy2 - sy0) +
+       dx2 * (sy0 - sy1)) / denom;
 
-    const b = (dy0 * (sy1 - sy2) + dy1 * (sy2 - sy0) + dy2 * (sy0 - sy1)) / denom;
-    const d = (dy0 * (sx2 - sx1) + dy1 * (sx0 - sx2) + dy2 * (sx1 - sx0)) / denom;
-    const f = (dy0 * (sx1 * sy2 - sx2 * sy1) + dy1 * (sx2 * sy0 - sx0 * sy2) + dy2 * (sx0 * sy1 - sx1 * sy0)) / denom;
+    const c =
+      (dx0 * (sx2 - sx1) +
+       dx1 * (sx0 - sx2) +
+       dx2 * (sx1 - sx0)) / denom;
+
+    const e =
+      (dx0 * (sx1 * sy2 - sx2 * sy1) +
+       dx1 * (sx2 * sy0 - sx0 * sy2) +
+       dx2 * (sx0 * sy1 - sx1 * sy0)) / denom;
+
+    const b =
+      (dy0 * (sy1 - sy2) +
+       dy1 * (sy2 - sy0) +
+       dy2 * (sy0 - sy1)) / denom;
+
+    const d =
+      (dy0 * (sx2 - sx1) +
+       dy1 * (sx0 - sx2) +
+       dy2 * (sx1 - sx0)) / denom;
+
+    const f =
+      (dy0 * (sx1 * sy2 - sx2 * sy1) +
+       dy1 * (sx2 * sy0 - sx0 * sy2) +
+       dy2 * (sx0 * sy1 - sx1 * sy0)) / denom;
 
     return { a, b, c, d, e, f };
   }
