@@ -5,86 +5,65 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>이미지 펴기</title>
   <style>
-    :root {
-      --bg: #0f172a;
-      --panel: #111827;
-      --line: #334155;
-      --text: #e5e7eb;
-      --muted: #94a3b8;
-      --accent: #38bdf8;
-      --yellow: #facc15;
-      --danger: #fb7185;
-    }
-
     * { box-sizing: border-box; }
 
     body {
       margin: 0;
-      min-height: 100vh;
-      background: radial-gradient(circle at top, #1e293b, #020617 70%);
-      color: var(--text);
+      background: #020617;
+      color: #e5e7eb;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       overscroll-behavior: none;
     }
 
     header {
-      padding: 14px 14px 8px;
+      padding: 14px 12px 8px;
       text-align: center;
     }
 
     h1 {
       margin: 0;
       font-size: 20px;
-      font-weight: 800;
-      letter-spacing: -0.03em;
     }
 
     .sub {
       margin-top: 5px;
+      color: #94a3b8;
       font-size: 12px;
-      color: var(--muted);
     }
 
     .toolbar {
       position: sticky;
       top: 0;
-      z-index: 10;
+      z-index: 20;
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 8px;
       padding: 10px;
-      background: rgba(2, 6, 23, 0.85);
-      backdrop-filter: blur(12px);
-      border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+      background: rgba(2, 6, 23, 0.88);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid rgba(148, 163, 184, 0.25);
     }
 
-    button, label.file-btn {
-      appearance: none;
+    button,
+    label {
       border: 1px solid rgba(148, 163, 184, 0.35);
       background: linear-gradient(180deg, #1f2937, #111827);
-      color: var(--text);
+      color: #e5e7eb;
       border-radius: 14px;
       padding: 12px 10px;
       font-size: 14px;
-      font-weight: 700;
+      font-weight: 800;
       text-align: center;
       cursor: pointer;
-      user-select: none;
     }
 
     button.primary {
       background: linear-gradient(180deg, #0ea5e9, #0369a1);
-      border-color: rgba(125, 211, 252, 0.65);
-    }
-
-    button.danger {
-      background: linear-gradient(180deg, #be123c, #881337);
-      border-color: rgba(251, 113, 133, 0.65);
+      border-color: #7dd3fc;
     }
 
     button:disabled {
       opacity: 0.45;
-      cursor: not-allowed;
     }
 
     input[type="file"] {
@@ -98,12 +77,11 @@
     .stage {
       position: relative;
       width: 100%;
-      height: min(66vh, 720px);
-      background: #020617;
+      height: 68vh;
+      background: #000;
       border: 1px solid rgba(148, 163, 184, 0.25);
       border-radius: 18px;
       overflow: hidden;
-      box-shadow: 0 18px 50px rgba(0,0,0,0.35);
       touch-action: none;
     }
 
@@ -112,20 +90,32 @@
       inset: 0;
       width: 100%;
       height: 100%;
-      display: block;
       touch-action: none;
     }
 
+    #magnifier {
+      position: fixed;
+      width: 150px;
+      height: 150px;
+      border-radius: 50%;
+      border: 4px solid #facc15;
+      background: #000;
+      z-index: 999;
+      display: none;
+      pointer-events: none;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.55);
+    }
+
     .hint {
-      padding: 10px 14px 18px;
-      color: var(--muted);
+      padding: 8px 14px 16px;
+      color: #94a3b8;
       font-size: 13px;
-      line-height: 1.5;
+      line-height: 1.55;
     }
 
     .result-box {
-      padding: 10px;
       display: none;
+      padding: 10px;
     }
 
     .result-box.show {
@@ -134,76 +124,72 @@
 
     .result-box img {
       width: 100%;
+      background: white;
       border-radius: 16px;
       border: 1px solid rgba(148, 163, 184, 0.25);
-      background: white;
     }
 
     .download {
       display: block;
       margin-top: 10px;
-      padding: 13px 12px;
+      padding: 14px;
       border-radius: 14px;
       text-align: center;
-      text-decoration: none;
       color: white;
-      font-weight: 800;
+      text-decoration: none;
+      font-weight: 900;
       background: linear-gradient(180deg, #22c55e, #15803d);
-      border: 1px solid rgba(134, 239, 172, 0.5);
-    }
-
-    .small {
-      font-size: 12px;
-      color: var(--muted);
-      margin-top: 8px;
-      text-align: center;
     }
   </style>
 </head>
+
 <body>
-  <header>
-    <h1>이미지 펴기</h1>
-    <div class="sub">아이폰 Safari용 · 네 꼭짓점 잡고 반듯하게 펴기</div>
-  </header>
+<header>
+  <h1>이미지 펴기</h1>
+  <div class="sub">사진 선택 → 자동 영역 추정 → 꼭짓점 보정 → 펴기</div>
+</header>
 
-  <div class="toolbar">
-    <label class="file-btn" for="fileInput">사진 선택</label>
-    <button id="cameraBtn">카메라 촬영</button>
-    <button id="resetBtn" disabled>영역 초기화</button>
-    <button id="dewarpBtn" class="primary" disabled>펴기</button>
+<div class="toolbar">
+  <label for="fileInput">사진 선택</label>
+  <button id="cameraBtn">카메라 촬영</button>
+  <button id="autoBtn" disabled>자동 영역</button>
+  <button id="dewarpBtn" class="primary" disabled>펴기</button>
+</div>
+
+<input id="fileInput" type="file" accept="image/*" />
+<input id="cameraInput" type="file" accept="image/*" capture="environment" />
+
+<div class="stage-wrap">
+  <div class="stage" id="stage">
+    <canvas id="canvas"></canvas>
   </div>
+</div>
 
-  <input id="fileInput" type="file" accept="image/*" />
-  <input id="cameraInput" type="file" accept="image/*" capture="environment" />
+<canvas id="magnifier"></canvas>
 
-  <div class="stage-wrap">
-    <div class="stage" id="stage">
-      <canvas id="canvas"></canvas>
-    </div>
-  </div>
+<div class="hint">
+  노란 점을 손가락으로 움직이면 확대창이 뜬다.<br>
+  사진 선택 시 자동으로 영역을 잡지만, 안 맞으면 네 귀퉁이를 직접 맞추면 됨.
+</div>
 
-  <div class="hint">
-    1) 사진을 고르고, 노란 점 4개를 문서/표의 네 귀퉁이에 맞춰라.<br>
-    2) <b>펴기</b>를 누르면 아래에 결과가 나온다.<br>
-    3) 아이폰에서 저장이 안 보이면 결과 이미지를 길게 눌러 <b>사진에 저장</b>하면 된다.
-  </div>
-
-  <div class="result-box" id="resultBox">
-    <img id="resultImg" alt="펴진 이미지" />
-    <a id="downloadLink" class="download" download="dewarped.png">이미지 저장</a>
-    <div class="small">Safari에서는 다운로드 대신 이미지를 길게 눌러 저장하는 게 더 안정적일 수 있음</div>
-  </div>
+<div class="result-box" id="resultBox">
+  <img id="resultImg" alt="펴진 이미지" />
+  <a id="downloadLink" class="download" download="dewarped.png">이미지 저장</a>
+</div>
 
 <script>
 (() => {
+  const stage = document.getElementById("stage");
   const canvas = document.getElementById("canvas");
   const ctx = canvas.getContext("2d");
-  const stage = document.getElementById("stage");
+
+  const magnifier = document.getElementById("magnifier");
+  const magCtx = magnifier.getContext("2d");
 
   const fileInput = document.getElementById("fileInput");
   const cameraInput = document.getElementById("cameraInput");
   const cameraBtn = document.getElementById("cameraBtn");
-  const resetBtn = document.getElementById("resetBtn");
+  const autoBtn = document.getElementById("autoBtn");
   const dewarpBtn = document.getElementById("dewarpBtn");
 
   const resultBox = document.getElementById("resultBox");
@@ -211,57 +197,42 @@
   const downloadLink = document.getElementById("downloadLink");
 
   let img = new Image();
-  let imgLoaded = false;
+  let loaded = false;
   let imageW = 0;
   let imageH = 0;
 
-  let view = {
-    scale: 1,
-    x: 0,
-    y: 0,
-    w: 0,
-    h: 0
-  };
-
+  let view = { x: 0, y: 0, w: 0, h: 0, scale: 1 };
   let points = [];
   let dragging = -1;
 
   function resizeCanvas() {
     const dpr = window.devicePixelRatio || 1;
-    const rect = stage.getBoundingClientRect();
-    canvas.width = Math.round(rect.width * dpr);
-    canvas.height = Math.round(rect.height * dpr);
-    canvas.style.width = rect.width + "px";
-    canvas.style.height = rect.height + "px";
+    const r = stage.getBoundingClientRect();
+
+    canvas.width = Math.round(r.width * dpr);
+    canvas.height = Math.round(r.height * dpr);
+    canvas.style.width = r.width + "px";
+    canvas.style.height = r.height + "px";
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    magnifier.width = 150 * dpr;
+    magnifier.height = 150 * dpr;
+    magCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    if (loaded) fitView();
     draw();
   }
 
   function fitView() {
-    const rect = stage.getBoundingClientRect();
+    const r = stage.getBoundingClientRect();
     const pad = 12;
-    const scale = Math.min(
-      (rect.width - pad * 2) / imageW,
-      (rect.height - pad * 2) / imageH
-    );
+    const scale = Math.min((r.width - pad * 2) / imageW, (r.height - pad * 2) / imageH);
 
     view.scale = scale;
     view.w = imageW * scale;
     view.h = imageH * scale;
-    view.x = (rect.width - view.w) / 2;
-    view.y = (rect.height - view.h) / 2;
-  }
-
-  function resetPoints() {
-    const mx = imageW * 0.06;
-    const my = imageH * 0.06;
-    points = [
-      { x: mx, y: my },
-      { x: imageW - mx, y: my },
-      { x: imageW - mx, y: imageH - my },
-      { x: mx, y: imageH - my }
-    ];
-    draw();
+    view.x = (r.width - view.w) / 2;
+    view.y = (r.height - view.h) / 2;
   }
 
   function imgToScreen(p) {
@@ -283,17 +254,17 @@
   }
 
   function draw() {
-    const rect = stage.getBoundingClientRect();
-    ctx.clearRect(0, 0, rect.width, rect.height);
+    const r = stage.getBoundingClientRect();
 
-    ctx.fillStyle = "#020617";
-    ctx.fillRect(0, 0, rect.width, rect.height);
+    ctx.clearRect(0, 0, r.width, r.height);
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, r.width, r.height);
 
-    if (!imgLoaded) {
+    if (!loaded) {
       ctx.fillStyle = "#94a3b8";
-      ctx.font = "14px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif";
+      ctx.font = "14px -apple-system";
       ctx.textAlign = "center";
-      ctx.fillText("사진을 선택하면 여기에 표시됨", rect.width / 2, rect.height / 2);
+      ctx.fillText("사진을 선택하세요", r.width / 2, r.height / 2);
       return;
     }
 
@@ -301,44 +272,95 @@
 
     const sp = points.map(imgToScreen);
 
-    ctx.save();
-
-    ctx.strokeStyle = "rgba(56, 189, 248, 0.95)";
-    ctx.lineWidth = 3;
     ctx.beginPath();
     ctx.moveTo(sp[0].x, sp[0].y);
-    for (let i = 1; i < sp.length; i++) ctx.lineTo(sp[i].x, sp[i].y);
+    for (let i = 1; i < 4; i++) ctx.lineTo(sp[i].x, sp[i].y);
     ctx.closePath();
+    ctx.fillStyle = "rgba(56,189,248,0.16)";
+    ctx.fill();
+    ctx.strokeStyle = "#38bdf8";
+    ctx.lineWidth = 3;
     ctx.stroke();
 
-    ctx.fillStyle = "rgba(56, 189, 248, 0.16)";
-    ctx.fill();
-
-    for (let i = 0; i < sp.length; i++) {
+    for (let i = 0; i < 4; i++) {
       ctx.beginPath();
-      ctx.arc(sp[i].x, sp[i].y, 12, 0, Math.PI * 2);
+      ctx.arc(sp[i].x, sp[i].y, 13, 0, Math.PI * 2);
       ctx.fillStyle = "#facc15";
       ctx.fill();
+      ctx.strokeStyle = "#020617";
       ctx.lineWidth = 3;
-      ctx.strokeStyle = "#111827";
       ctx.stroke();
 
       ctx.fillStyle = "#020617";
-      ctx.font = "bold 12px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif";
+      ctx.font = "bold 12px -apple-system";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(String(i + 1), sp[i].x, sp[i].y);
+      ctx.fillText(i + 1, sp[i].x, sp[i].y);
     }
+  }
 
-    ctx.restore();
+  function showMagnifier(touchX, touchY, imgPoint) {
+    const size = 150;
+    const zoom = 3.2;
+    const sourceSize = size / zoom;
+
+    let left = touchX - size / 2;
+    let top = touchY - size - 35;
+
+    if (top < 10) top = touchY + 35;
+    if (left < 8) left = 8;
+    if (left + size > window.innerWidth - 8) left = window.innerWidth - size - 8;
+
+    magnifier.style.left = left + "px";
+    magnifier.style.top = top + "px";
+    magnifier.style.display = "block";
+
+    magCtx.clearRect(0, 0, size, size);
+    magCtx.save();
+
+    magCtx.beginPath();
+    magCtx.arc(size / 2, size / 2, size / 2 - 4, 0, Math.PI * 2);
+    magCtx.clip();
+
+    magCtx.fillStyle = "#000";
+    magCtx.fillRect(0, 0, size, size);
+
+    magCtx.drawImage(
+      img,
+      imgPoint.x - sourceSize / 2,
+      imgPoint.y - sourceSize / 2,
+      sourceSize,
+      sourceSize,
+      0,
+      0,
+      size,
+      size
+    );
+
+    magCtx.strokeStyle = "#facc15";
+    magCtx.lineWidth = 2;
+    magCtx.beginPath();
+    magCtx.moveTo(size / 2, 0);
+    magCtx.lineTo(size / 2, size);
+    magCtx.moveTo(0, size / 2);
+    magCtx.lineTo(size, size / 2);
+    magCtx.stroke();
+
+    magCtx.restore();
+  }
+
+  function hideMagnifier() {
+    magnifier.style.display = "none";
   }
 
   function getPos(e) {
-    const rect = canvas.getBoundingClientRect();
+    const r = canvas.getBoundingClientRect();
     const t = e.touches ? e.touches[0] : e;
     return {
-      x: t.clientX - rect.left,
-      y: t.clientY - rect.top
+      x: t.clientX - r.left,
+      y: t.clientY - r.top,
+      pageX: t.clientX,
+      pageY: t.clientY
     };
   }
 
@@ -347,34 +369,43 @@
     let bestDist = Infinity;
 
     for (let i = 0; i < points.length; i++) {
-      const sp = imgToScreen(points[i]);
-      const d = Math.hypot(sp.x - x, sp.y - y);
+      const p = imgToScreen(points[i]);
+      const d = Math.hypot(p.x - x, p.y - y);
       if (d < bestDist) {
-        best = i;
         bestDist = d;
+        best = i;
       }
     }
 
-    return bestDist <= 38 ? best : -1;
+    return bestDist <= 45 ? best : -1;
   }
 
   function onDown(e) {
-    if (!imgLoaded) return;
+    if (!loaded) return;
     e.preventDefault();
+
     const p = getPos(e);
     dragging = nearestPoint(p.x, p.y);
+
+    if (dragging >= 0) {
+      showMagnifier(p.pageX, p.pageY, points[dragging]);
+    }
   }
 
   function onMove(e) {
-    if (!imgLoaded || dragging < 0) return;
+    if (!loaded || dragging < 0) return;
     e.preventDefault();
+
     const p = getPos(e);
     points[dragging] = screenToImg(p.x, p.y);
+
     draw();
+    showMagnifier(p.pageX, p.pageY, points[dragging]);
   }
 
-  function onUp(e) {
+  function onUp() {
     dragging = -1;
+    hideMagnifier();
   }
 
   canvas.addEventListener("mousedown", onDown);
@@ -393,23 +424,22 @@
 
     reader.onload = () => {
       img = new Image();
+
       img.onload = () => {
         imageW = img.naturalWidth;
         imageH = img.naturalHeight;
-        imgLoaded = true;
+        loaded = true;
 
         fitView();
-        resetPoints();
+        points = autoDetectDocumentPoints();
 
-        resetBtn.disabled = false;
+        autoBtn.disabled = false;
         dewarpBtn.disabled = false;
 
         resultBox.classList.remove("show");
-        resultImg.removeAttribute("src");
-        downloadLink.removeAttribute("href");
-
         draw();
       };
+
       img.src = reader.result;
     };
 
@@ -418,37 +448,107 @@
 
   fileInput.addEventListener("change", e => loadFile(e.target.files[0]));
   cameraInput.addEventListener("change", e => loadFile(e.target.files[0]));
-
   cameraBtn.addEventListener("click", () => cameraInput.click());
-  resetBtn.addEventListener("click", () => resetPoints());
+
+  autoBtn.addEventListener("click", () => {
+    if (!loaded) return;
+    points = autoDetectDocumentPoints();
+    draw();
+  });
+
+  function autoDetectDocumentPoints() {
+    const maxSide = 520;
+    const scale = Math.min(maxSide / imageW, maxSide / imageH, 1);
+    const w = Math.round(imageW * scale);
+    const h = Math.round(imageH * scale);
+
+    const temp = document.createElement("canvas");
+    temp.width = w;
+    temp.height = h;
+
+    const tctx = temp.getContext("2d", { willReadFrequently: true });
+    tctx.drawImage(img, 0, 0, w, h);
+
+    const data = tctx.getImageData(0, 0, w, h).data;
+
+    let minX = w, minY = h, maxX = 0, maxY = 0;
+    let found = false;
+
+    for (let y = 0; y < h; y += 2) {
+      for (let x = 0; x < w; x += 2) {
+        const idx = (y * w + x) * 4;
+        const r = data[idx];
+        const g = data[idx + 1];
+        const b = data[idx + 2];
+
+        const brightness = (r + g + b) / 3;
+        const diff = Math.max(r, g, b) - Math.min(r, g, b);
+
+        if (brightness > 105 && diff < 95) {
+          minX = Math.min(minX, x);
+          minY = Math.min(minY, y);
+          maxX = Math.max(maxX, x);
+          maxY = Math.max(maxY, y);
+          found = true;
+        }
+      }
+    }
+
+    if (!found || maxX - minX < w * 0.25 || maxY - minY < h * 0.25) {
+      const mx = imageW * 0.06;
+      const my = imageH * 0.06;
+      return [
+        { x: mx, y: my },
+        { x: imageW - mx, y: my },
+        { x: imageW - mx, y: imageH - my },
+        { x: mx, y: imageH - my }
+      ];
+    }
+
+    const padX = (maxX - minX) * 0.025;
+    const padY = (maxY - minY) * 0.025;
+
+    minX = clamp(minX - padX, 0, w);
+    minY = clamp(minY - padY, 0, h);
+    maxX = clamp(maxX + padX, 0, w);
+    maxY = clamp(maxY + padY, 0, h);
+
+    return [
+      { x: minX / scale, y: minY / scale },
+      { x: maxX / scale, y: minY / scale },
+      { x: maxX / scale, y: maxY / scale },
+      { x: minX / scale, y: maxY / scale }
+    ];
+  }
 
   dewarpBtn.addEventListener("click", () => {
-    if (!imgLoaded) return;
+    if (!loaded) return;
 
-    const ordered = orderPoints(points);
+    const q = orderPoints(points);
 
-    const w1 = dist(ordered[0], ordered[1]);
-    const w2 = dist(ordered[3], ordered[2]);
-    const h1 = dist(ordered[0], ordered[3]);
-    const h2 = dist(ordered[1], ordered[2]);
+    const outW = Math.max(
+      100,
+      Math.round(Math.max(dist(q[0], q[1]), dist(q[3], q[2])))
+    );
 
-    const outW = Math.max(80, Math.round(Math.max(w1, w2)));
-    const outH = Math.max(80, Math.round(Math.max(h1, h2)));
+    const outH = Math.max(
+      100,
+      Math.round(Math.max(dist(q[0], q[3]), dist(q[1], q[2])))
+    );
 
     const out = document.createElement("canvas");
     out.width = outW;
     out.height = outH;
-    const octx = out.getContext("2d");
 
+    const octx = out.getContext("2d");
     octx.fillStyle = "white";
     octx.fillRect(0, 0, outW, outH);
 
-    warpQuadToRect(octx, img, ordered, outW, outH, 42);
+    warpQuadToRect(octx, img, q, outW, outH, 48);
 
-    const dataUrl = out.toDataURL("image/png");
-
-    resultImg.src = dataUrl;
-    downloadLink.href = dataUrl;
+    const url = out.toDataURL("image/png");
+    resultImg.src = url;
+    downloadLink.href = url;
     resultBox.classList.add("show");
 
     setTimeout(() => {
@@ -456,49 +556,41 @@
     }, 100);
   });
 
-  function dist(a, b) {
-    return Math.hypot(a.x - b.x, a.y - b.y);
-  }
-
   function orderPoints(pts) {
     const arr = pts.map(p => ({ x: p.x, y: p.y }));
-    const sum = arr.map(p => p.x + p.y);
-    const diff = arr.map(p => p.y - p.x);
+
+    const sums = arr.map(p => p.x + p.y);
+    const diffs = arr.map(p => p.y - p.x);
 
     return [
-      arr[indexOfMin(sum)],   // top-left
-      arr[indexOfMin(diff)],  // top-right
-      arr[indexOfMax(sum)],   // bottom-right
-      arr[indexOfMax(diff)]   // bottom-left
+      arr[indexMin(sums)],
+      arr[indexMin(diffs)],
+      arr[indexMax(sums)],
+      arr[indexMax(diffs)]
     ];
   }
 
-  function indexOfMin(a) {
+  function indexMin(a) {
     let idx = 0;
     for (let i = 1; i < a.length; i++) if (a[i] < a[idx]) idx = i;
     return idx;
   }
 
-  function indexOfMax(a) {
+  function indexMax(a) {
     let idx = 0;
     for (let i = 1; i < a.length; i++) if (a[i] > a[idx]) idx = i;
     return idx;
   }
 
+  function dist(a, b) {
+    return Math.hypot(a.x - b.x, a.y - b.y);
+  }
+
   function bilinear(tl, tr, br, bl, u, v) {
-    const x =
-      tl.x * (1 - u) * (1 - v) +
-      tr.x * u * (1 - v) +
-      br.x * u * v +
-      bl.x * (1 - u) * v;
-
-    const y =
-      tl.y * (1 - u) * (1 - v) +
-      tr.y * u * (1 - v) +
-      br.y * u * v +
-      bl.y * (1 - u) * v;
-
-    return { x, y };
+    return {
+      x: tl.x * (1 - u) * (1 - v) + tr.x * u * (1 - v) + br.x * u * v + bl.x * (1 - u) * v,
+      y: tl.y * (1 - u) * (1 - v) + tr.y * u * (1 - v) + br.y * u * v + bl.y * (1 - u) * v
+    };
   }
 
   function warpQuadToRect(octx, sourceImg, quad, outW, outH, grid) {
@@ -538,7 +630,6 @@
     ctx.clip();
 
     const m = affineFromTriangles(s0, s1, s2, d0, d1, d2);
-
     ctx.setTransform(m.a, m.b, m.c, m.d, m.e, m.f);
     ctx.drawImage(image, 0, 0);
 
@@ -571,11 +662,7 @@
     return { a, b, c, d, e, f };
   }
 
-  window.addEventListener("resize", () => {
-    if (imgLoaded) fitView();
-    resizeCanvas();
-  });
-
+  window.addEventListener("resize", resizeCanvas);
   resizeCanvas();
 })();
 </script>
