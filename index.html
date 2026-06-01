@@ -30,9 +30,7 @@
       padding: env(safe-area-inset-top) 12px env(safe-area-inset-bottom);
     }
 
-    header {
-      padding: 16px 4px 10px;
-    }
+    header { padding: 16px 4px 10px; }
 
     h1 {
       margin: 0;
@@ -125,9 +123,7 @@
       font-size: 14px;
     }
 
-    .options input {
-      transform: scale(1.2);
-    }
+    .options input { transform: scale(1.2); }
 
     .status {
       color: var(--muted);
@@ -161,12 +157,12 @@
 <body>
   <header>
     <h1>이미지 펴기</h1>
-    <div class="sub">아이폰 Safari에서 사진을 고르고, 네 귀퉁이를 맞춘 뒤 반듯하게 펴는 간단 스캐너입니다.</div>
+    <div class="sub">사진을 고르면 네 귀퉁이를 자동으로 잡고, 손가락으로 미세 조정할 때 확대창이 뜹니다.</div>
   </header>
 
   <div class="toolbar">
     <label class="filebtn" for="fileInput">사진 선택</label>
-    <button id="resetBtn">영역 초기화</button>
+    <button id="autoBtn">자동 꼭짓점</button>
     <button id="warpBtn" class="ok" disabled>펴기</button>
     <button id="backBtn" disabled>원본으로</button>
   </div>
@@ -181,7 +177,7 @@
   <div class="stage" id="stage">
     <div class="hint" id="hint">
       사진을 선택하세요.<br>
-      문서나 정책표의 네 귀퉁이에 노란 점을 맞추면 됩니다.
+      문서나 정책표의 네 귀퉁이를 자동으로 먼저 잡아줍니다.
     </div>
     <canvas id="canvas" style="display:none;"></canvas>
   </div>
@@ -190,7 +186,7 @@
 
   <div class="status" id="status"></div>
   <div class="small">
-    참고: 이 버전은 사진의 사다리꼴/기울어진 원근을 펴는 용도입니다. 종이가 물결처럼 심하게 휘어진 경우는 완전 복원까지는 어렵습니다.
+    참고: 사다리꼴/기울어진 원근 보정용입니다. 종이가 물결처럼 실제로 휘어진 경우는 완전 복원까지는 어렵습니다.
   </div>
 
   <script>
@@ -199,7 +195,7 @@
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     const hint = document.getElementById('hint');
     const statusEl = document.getElementById('status');
-    const resetBtn = document.getElementById('resetBtn');
+    const autoBtn = document.getElementById('autoBtn');
     const warpBtn = document.getElementById('warpBtn');
     const backBtn = document.getElementById('backBtn');
     const enhanceChk = document.getElementById('enhanceChk');
@@ -223,6 +219,9 @@
 
     let points = [];
     let dragging = -1;
+    let showLoupe = false;
+    let pointerCss = { x: 0, y: 0 };
+    let loupePoint = null;
 
     function setStatus(msg) {
       statusEl.textContent = msg || '';
@@ -232,18 +231,174 @@
       return Math.max(min, Math.min(max, v));
     }
 
-    function resetPoints() {
-      if (!currentImg) return;
+    function dist(a, b) {
+      const dx = a.x - b.x;
+      const dy = a.y - b.y;
+      return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    function orderPoints(raw) {
+      const pts = raw.map(p => ({x: p.x, y: p.y}));
+      const sums = pts.map(p => p.x + p.y);
+      const diffs = pts.map(p => p.x - p.y);
+
+      return [
+        pts[sums.indexOf(Math.min(...sums))],
+        pts[diffs.indexOf(Math.max(...diffs))],
+        pts[sums.indexOf(Math.max(...sums))],
+        pts[diffs.indexOf(Math.min(...diffs))]
+      ];
+    }
+
+    function polygonArea(pts) {
+      let area = 0;
+      for (let i = 0; i < pts.length; i++) {
+        const j = (i + 1) % pts.length;
+        area += pts[i].x * pts[j].y - pts[j].x * pts[i].y;
+      }
+      return Math.abs(area / 2);
+    }
+
+    function convexHull(pts) {
+      if (pts.length <= 3) return pts;
+      const sorted = pts.slice().sort((a, b) => a.x === b.x ? a.y - b.y : a.x - b.x);
+      const cross = (o, a, b) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+
+      const lower = [];
+      for (const p of sorted) {
+        while (lower.length >= 2 && cross(lower[lower.length-2], lower[lower.length-1], p) <= 0) lower.pop();
+        lower.push(p);
+      }
+
+      const upper = [];
+      for (let i = sorted.length - 1; i >= 0; i--) {
+        const p = sorted[i];
+        while (upper.length >= 2 && cross(upper[upper.length-2], upper[upper.length-1], p) <= 0) upper.pop();
+        upper.push(p);
+      }
+
+      upper.pop();
+      lower.pop();
+      return lower.concat(upper);
+    }
+
+    function fallbackPoints() {
       const w = display.imgW;
       const h = display.imgH;
-      points = [
+      return [
         {x: w * 0.06, y: h * 0.06},
         {x: w * 0.94, y: h * 0.06},
         {x: w * 0.94, y: h * 0.94},
         {x: w * 0.06, y: h * 0.94}
       ];
+    }
+
+    function autoDetectCorners() {
+      if (!originalImg) return fallbackPoints();
+
+      const w = originalCanvas.width;
+      const h = originalCanvas.height;
+
+      const smallW = 420;
+      const scale = smallW / w;
+      const smallH = Math.round(h * scale);
+
+      const tmp = document.createElement('canvas');
+      tmp.width = smallW;
+      tmp.height = smallH;
+      const tctx = tmp.getContext('2d', { willReadFrequently: true });
+      tctx.drawImage(originalCanvas, 0, 0, smallW, smallH);
+
+      const imgData = tctx.getImageData(0, 0, smallW, smallH);
+      const data = imgData.data;
+      const gray = new Uint8ClampedArray(smallW * smallH);
+
+      for (let i = 0, j = 0; i < data.length; i += 4, j++) {
+        gray[j] = Math.round(0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2]);
+      }
+
+      const edges = [];
+      for (let y = 1; y < smallH - 1; y += 2) {
+        for (let x = 1; x < smallW - 1; x += 2) {
+          const idx = y * smallW + x;
+          const gx =
+            -gray[idx - smallW - 1] + gray[idx - smallW + 1] +
+            -2 * gray[idx - 1] + 2 * gray[idx + 1] +
+            -gray[idx + smallW - 1] + gray[idx + smallW + 1];
+
+          const gy =
+            -gray[idx - smallW - 1] - 2 * gray[idx - smallW] - gray[idx - smallW + 1] +
+            gray[idx + smallW - 1] + 2 * gray[idx + smallW] + gray[idx + smallW + 1];
+
+          const mag = Math.abs(gx) + Math.abs(gy);
+          if (mag > 110) edges.push({x, y});
+        }
+      }
+
+      if (edges.length < 80) return fallbackPoints();
+
+      const hull = convexHull(edges);
+      if (hull.length < 4) return fallbackPoints();
+
+      let best = null;
+      let bestScore = -Infinity;
+      const n = hull.length;
+      const step = Math.max(1, Math.floor(n / 42));
+
+      for (let a = 0; a < n; a += step) {
+        for (let b = a + step; b < n; b += step) {
+          for (let c = b + step; c < n; c += step) {
+            for (let d = c + step; d < n; d += step) {
+              const quad = [hull[a], hull[b], hull[c], hull[d]];
+              const area = polygonArea(quad);
+              const minArea = smallW * smallH * 0.12;
+              if (area < minArea) continue;
+
+              const ordered = orderPoints(quad);
+              const widthTop = dist(ordered[0], ordered[1]);
+              const widthBottom = dist(ordered[3], ordered[2]);
+              const heightLeft = dist(ordered[0], ordered[3]);
+              const heightRight = dist(ordered[1], ordered[2]);
+              const regularity =
+                Math.min(widthTop, widthBottom) / Math.max(widthTop, widthBottom) +
+                Math.min(heightLeft, heightRight) / Math.max(heightLeft, heightRight);
+
+              const marginPenalty = ordered.some(p => p.x < 4 || p.y < 4 || p.x > smallW-5 || p.y > smallH-5) ? 0.92 : 1;
+              const score = area * (0.7 + regularity * 0.15) * marginPenalty;
+
+              if (score > bestScore) {
+                bestScore = score;
+                best = ordered;
+              }
+            }
+          }
+        }
+      }
+
+      if (!best) return fallbackPoints();
+
+      let detected = best.map(p => ({x: p.x / scale, y: p.y / scale}));
+      detected = orderPoints(detected);
+
+      const detectedArea = polygonArea(detected);
+      if (detectedArea < w * h * 0.15) return fallbackPoints();
+
+      return detected.map(p => ({
+        x: clamp(p.x, 0, w - 1),
+        y: clamp(p.y, 0, h - 1)
+      }));
+    }
+
+    function resetPoints(auto = false) {
+      if (!currentImg) return;
+      if (auto) {
+        points = autoDetectCorners();
+        setStatus('자동으로 꼭짓점을 잡았습니다. 틀리면 노란 점을 살짝 옮겨주세요.');
+      } else {
+        points = fallbackPoints();
+        setStatus('영역을 기본값으로 초기화했습니다.');
+      }
       drawEditor();
-      setStatus('노란 점을 문서/표의 네 귀퉁이에 맞춰주세요.');
     }
 
     function loadImageFromFile(file) {
@@ -274,11 +429,9 @@
         backBtn.disabled = true;
 
         resizeCanvasForImage(w, h);
-        resetPoints();
+        resetPoints(true);
       };
-      img.onerror = () => {
-        setStatus('이미지를 읽지 못했습니다.');
-      };
+      img.onerror = () => setStatus('이미지를 읽지 못했습니다.');
       img.src = url;
     }
 
@@ -298,8 +451,61 @@
       canvas.height = Math.floor(cssH * dpr);
 
       ctx.setTransform(dpr * scale, 0, 0, dpr * scale, 0, 0);
-
       display = { scale, offsetX: 0, offsetY: 0, imgW, imgH, cssW, cssH };
+    }
+
+    function drawLoupe() {
+      if (!showLoupe || dragging < 0 || !loupePoint || !currentImg) return;
+
+      const cssRadius = 58;
+      const imageRadius = cssRadius / display.scale;
+      const zoom = 2.7;
+      const p = loupePoint;
+
+      let lx = pointerCss.x + 30;
+      let ly = pointerCss.y - 145;
+
+      if (lx + cssRadius * 2 > display.cssW - 4) lx = pointerCss.x - cssRadius * 2 - 30;
+      if (lx < 4) lx = 4;
+      if (ly < 4) ly = pointerCss.y + 36;
+      if (ly + cssRadius * 2 > display.cssH - 4) ly = display.cssH - cssRadius * 2 - 4;
+
+      ctx.save();
+
+      ctx.setTransform(window.devicePixelRatio || 1, 0, 0, window.devicePixelRatio || 1, 0, 0);
+
+      ctx.beginPath();
+      ctx.arc(lx + cssRadius, ly + cssRadius, cssRadius, 0, Math.PI * 2);
+      ctx.clip();
+
+      const sx = clamp(p.x - imageRadius / zoom, 0, display.imgW);
+      const sy = clamp(p.y - imageRadius / zoom, 0, display.imgH);
+      const sw = imageRadius * 2 / zoom;
+      const sh = imageRadius * 2 / zoom;
+
+      ctx.drawImage(currentImg, sx, sy, sw, sh, lx, ly, cssRadius * 2, cssRadius * 2);
+
+      ctx.beginPath();
+      ctx.arc(lx + cssRadius, ly + cssRadius, cssRadius, 0, Math.PI * 2);
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = '#facc15';
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(lx + cssRadius - 18, ly + cssRadius);
+      ctx.lineTo(lx + cssRadius + 18, ly + cssRadius);
+      ctx.moveTo(lx + cssRadius, ly + cssRadius - 18);
+      ctx.lineTo(lx + cssRadius, ly + cssRadius + 18);
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#38bdf8';
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(lx + cssRadius, ly + cssRadius, 5, 0, Math.PI * 2);
+      ctx.fillStyle = '#facc15';
+      ctx.fill();
+
+      ctx.restore();
     }
 
     function drawEditor() {
@@ -309,36 +515,38 @@
       ctx.clearRect(0, 0, currentImg.width, currentImg.height);
       ctx.drawImage(currentImg, 0, 0);
 
-      if (mode !== 'edit') return;
+      if (mode === 'edit') {
+        ctx.lineWidth = 4 / display.scale;
+        ctx.strokeStyle = '#38bdf8';
+        ctx.fillStyle = 'rgba(56, 189, 248, 0.14)';
 
-      ctx.lineWidth = 4 / display.scale;
-      ctx.strokeStyle = '#38bdf8';
-      ctx.fillStyle = 'rgba(56, 189, 248, 0.14)';
-
-      ctx.beginPath();
-      ctx.moveTo(points[0].x, points[0].y);
-      for (let i = 1; i < 4; i++) ctx.lineTo(points[i].x, points[i].y);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-
-      const labels = ['좌상', '우상', '우하', '좌하'];
-      for (let i = 0; i < 4; i++) {
-        const p = points[i];
         ctx.beginPath();
-        ctx.fillStyle = '#facc15';
-        ctx.strokeStyle = '#020617';
-        ctx.lineWidth = 3 / display.scale;
-        ctx.arc(p.x, p.y, 13 / display.scale, 0, Math.PI * 2);
+        ctx.moveTo(points[0].x, points[0].y);
+        for (let i = 1; i < 4; i++) ctx.lineTo(points[i].x, points[i].y);
+        ctx.closePath();
         ctx.fill();
         ctx.stroke();
 
-        ctx.font = `${14 / display.scale}px -apple-system, BlinkMacSystemFont, sans-serif`;
-        ctx.fillStyle = '#f8fafc';
-        ctx.strokeStyle = '#020617';
-        ctx.lineWidth = 4 / display.scale;
-        ctx.strokeText(labels[i], p.x + 16 / display.scale, p.y - 12 / display.scale);
-        ctx.fillText(labels[i], p.x + 16 / display.scale, p.y - 12 / display.scale);
+        const labels = ['좌상', '우상', '우하', '좌하'];
+        for (let i = 0; i < 4; i++) {
+          const p = points[i];
+          ctx.beginPath();
+          ctx.fillStyle = '#facc15';
+          ctx.strokeStyle = '#020617';
+          ctx.lineWidth = 3 / display.scale;
+          ctx.arc(p.x, p.y, 13 / display.scale, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+
+          ctx.font = `${14 / display.scale}px -apple-system, BlinkMacSystemFont, sans-serif`;
+          ctx.fillStyle = '#f8fafc';
+          ctx.strokeStyle = '#020617';
+          ctx.lineWidth = 4 / display.scale;
+          ctx.strokeText(labels[i], p.x + 16 / display.scale, p.y - 12 / display.scale);
+          ctx.fillText(labels[i], p.x + 16 / display.scale, p.y - 12 / display.scale);
+        }
+
+        drawLoupe();
       }
     }
 
@@ -352,21 +560,25 @@
         clientX = evt.clientX;
         clientY = evt.clientY;
       }
+
+      pointerCss = {
+        x: clientX - rect.left,
+        y: clientY - rect.top
+      };
+
       return {
-        x: (clientX - rect.left) / display.scale,
-        y: (clientY - rect.top) / display.scale
+        x: pointerCss.x / display.scale,
+        y: pointerCss.y / display.scale
       };
     }
 
     function findNearestPoint(pos) {
       let best = -1;
       let bestDist = Infinity;
-      const hitRadius = 38 / display.scale;
+      const hitRadius = 44 / display.scale;
 
       for (let i = 0; i < points.length; i++) {
-        const dx = points[i].x - pos.x;
-        const dy = points[i].y - pos.y;
-        const d = Math.sqrt(dx * dx + dy * dy);
+        const d = dist(points[i], pos);
         if (d < bestDist && d < hitRadius) {
           best = i;
           bestDist = d;
@@ -380,6 +592,11 @@
       evt.preventDefault();
       const pos = getCanvasPoint(evt);
       dragging = findNearestPoint(pos);
+      if (dragging >= 0) {
+        showLoupe = true;
+        loupePoint = {...points[dragging]};
+        drawEditor();
+      }
     }
 
     function moveDrag(evt) {
@@ -388,17 +605,15 @@
       const pos = getCanvasPoint(evt);
       points[dragging].x = clamp(pos.x, 0, display.imgW - 1);
       points[dragging].y = clamp(pos.y, 0, display.imgH - 1);
+      loupePoint = {...points[dragging]};
       drawEditor();
     }
 
     function endDrag() {
       dragging = -1;
-    }
-
-    function dist(a, b) {
-      const dx = a.x - b.x;
-      const dy = a.y - b.y;
-      return Math.sqrt(dx * dx + dy * dy);
+      showLoupe = false;
+      loupePoint = null;
+      if (currentImg && mode === 'edit') drawEditor();
     }
 
     function solveHomography(src, dst) {
@@ -476,6 +691,7 @@
       if (!currentImg || points.length !== 4) return;
 
       setStatus('이미지를 펴는 중입니다.');
+      showLoupe = false;
 
       const [tl, tr, br, bl] = points;
       const outW = Math.max(10, Math.round(Math.max(dist(br, bl), dist(tr, tl))));
@@ -528,9 +744,7 @@
         }
       }
 
-      if (enhanceChk.checked) {
-        outData = enhanceImageData(outData);
-      }
+      if (enhanceChk.checked) outData = enhanceImageData(outData);
 
       outCtx.putImageData(outData, 0, 0);
       currentImg = outCanvas;
@@ -544,7 +758,7 @@
         const url = URL.createObjectURL(blob);
         downloadLink.href = url;
         downloadLink.style.display = 'block';
-        setStatus('완료. 저장 버튼을 길게 눌러 이미지 저장도 가능합니다.');
+        setStatus('완료. 저장 버튼을 눌러 PNG로 저장하세요.');
       }, 'image/png');
 
       backBtn.disabled = false;
@@ -555,14 +769,14 @@
       if (file) loadImageFromFile(file);
     });
 
-    resetBtn.addEventListener('click', () => {
+    autoBtn.addEventListener('click', () => {
       if (!originalImg) return;
       currentImg = originalCanvas;
       mode = 'edit';
       downloadLink.style.display = 'none';
       backBtn.disabled = true;
       resizeCanvasForImage(currentImg.width, currentImg.height);
-      resetPoints();
+      resetPoints(true);
     });
 
     warpBtn.addEventListener('click', warpImage);
