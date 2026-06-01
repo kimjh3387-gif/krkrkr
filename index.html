@@ -1,0 +1,583 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>이미지 펴기</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #111827;
+      --line: #334155;
+      --text: #e5e7eb;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --yellow: #facc15;
+      --danger: #fb7185;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: radial-gradient(circle at top, #1e293b, #020617 70%);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      overscroll-behavior: none;
+    }
+
+    header {
+      padding: 14px 14px 8px;
+      text-align: center;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+    }
+
+    .sub {
+      margin-top: 5px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      padding: 10px;
+      background: rgba(2, 6, 23, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+    }
+
+    button, label.file-btn {
+      appearance: none;
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      background: linear-gradient(180deg, #1f2937, #111827);
+      color: var(--text);
+      border-radius: 14px;
+      padding: 12px 10px;
+      font-size: 14px;
+      font-weight: 700;
+      text-align: center;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    button.primary {
+      background: linear-gradient(180deg, #0ea5e9, #0369a1);
+      border-color: rgba(125, 211, 252, 0.65);
+    }
+
+    button.danger {
+      background: linear-gradient(180deg, #be123c, #881337);
+      border-color: rgba(251, 113, 133, 0.65);
+    }
+
+    button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    input[type="file"] {
+      display: none;
+    }
+
+    .stage-wrap {
+      padding: 10px;
+    }
+
+    .stage {
+      position: relative;
+      width: 100%;
+      height: min(66vh, 720px);
+      background: #020617;
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      border-radius: 18px;
+      overflow: hidden;
+      box-shadow: 0 18px 50px rgba(0,0,0,0.35);
+      touch-action: none;
+    }
+
+    canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      touch-action: none;
+    }
+
+    .hint {
+      padding: 10px 14px 18px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .result-box {
+      padding: 10px;
+      display: none;
+    }
+
+    .result-box.show {
+      display: block;
+    }
+
+    .result-box img {
+      width: 100%;
+      border-radius: 16px;
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      background: white;
+    }
+
+    .download {
+      display: block;
+      margin-top: 10px;
+      padding: 13px 12px;
+      border-radius: 14px;
+      text-align: center;
+      text-decoration: none;
+      color: white;
+      font-weight: 800;
+      background: linear-gradient(180deg, #22c55e, #15803d);
+      border: 1px solid rgba(134, 239, 172, 0.5);
+    }
+
+    .small {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 8px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>이미지 펴기</h1>
+    <div class="sub">아이폰 Safari용 · 네 꼭짓점 잡고 반듯하게 펴기</div>
+  </header>
+
+  <div class="toolbar">
+    <label class="file-btn" for="fileInput">사진 선택</label>
+    <button id="cameraBtn">카메라 촬영</button>
+    <button id="resetBtn" disabled>영역 초기화</button>
+    <button id="dewarpBtn" class="primary" disabled>펴기</button>
+  </div>
+
+  <input id="fileInput" type="file" accept="image/*" />
+  <input id="cameraInput" type="file" accept="image/*" capture="environment" />
+
+  <div class="stage-wrap">
+    <div class="stage" id="stage">
+      <canvas id="canvas"></canvas>
+    </div>
+  </div>
+
+  <div class="hint">
+    1) 사진을 고르고, 노란 점 4개를 문서/표의 네 귀퉁이에 맞춰라.<br>
+    2) <b>펴기</b>를 누르면 아래에 결과가 나온다.<br>
+    3) 아이폰에서 저장이 안 보이면 결과 이미지를 길게 눌러 <b>사진에 저장</b>하면 된다.
+  </div>
+
+  <div class="result-box" id="resultBox">
+    <img id="resultImg" alt="펴진 이미지" />
+    <a id="downloadLink" class="download" download="dewarped.png">이미지 저장</a>
+    <div class="small">Safari에서는 다운로드 대신 이미지를 길게 눌러 저장하는 게 더 안정적일 수 있음</div>
+  </div>
+
+<script>
+(() => {
+  const canvas = document.getElementById("canvas");
+  const ctx = canvas.getContext("2d");
+  const stage = document.getElementById("stage");
+
+  const fileInput = document.getElementById("fileInput");
+  const cameraInput = document.getElementById("cameraInput");
+  const cameraBtn = document.getElementById("cameraBtn");
+  const resetBtn = document.getElementById("resetBtn");
+  const dewarpBtn = document.getElementById("dewarpBtn");
+
+  const resultBox = document.getElementById("resultBox");
+  const resultImg = document.getElementById("resultImg");
+  const downloadLink = document.getElementById("downloadLink");
+
+  let img = new Image();
+  let imgLoaded = false;
+  let imageW = 0;
+  let imageH = 0;
+
+  let view = {
+    scale: 1,
+    x: 0,
+    y: 0,
+    w: 0,
+    h: 0
+  };
+
+  let points = [];
+  let dragging = -1;
+
+  function resizeCanvas() {
+    const dpr = window.devicePixelRatio || 1;
+    const rect = stage.getBoundingClientRect();
+    canvas.width = Math.round(rect.width * dpr);
+    canvas.height = Math.round(rect.height * dpr);
+    canvas.style.width = rect.width + "px";
+    canvas.style.height = rect.height + "px";
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    draw();
+  }
+
+  function fitView() {
+    const rect = stage.getBoundingClientRect();
+    const pad = 12;
+    const scale = Math.min(
+      (rect.width - pad * 2) / imageW,
+      (rect.height - pad * 2) / imageH
+    );
+
+    view.scale = scale;
+    view.w = imageW * scale;
+    view.h = imageH * scale;
+    view.x = (rect.width - view.w) / 2;
+    view.y = (rect.height - view.h) / 2;
+  }
+
+  function resetPoints() {
+    const mx = imageW * 0.06;
+    const my = imageH * 0.06;
+    points = [
+      { x: mx, y: my },
+      { x: imageW - mx, y: my },
+      { x: imageW - mx, y: imageH - my },
+      { x: mx, y: imageH - my }
+    ];
+    draw();
+  }
+
+  function imgToScreen(p) {
+    return {
+      x: view.x + p.x * view.scale,
+      y: view.y + p.y * view.scale
+    };
+  }
+
+  function screenToImg(x, y) {
+    return {
+      x: clamp((x - view.x) / view.scale, 0, imageW),
+      y: clamp((y - view.y) / view.scale, 0, imageH)
+    };
+  }
+
+  function clamp(v, min, max) {
+    return Math.max(min, Math.min(max, v));
+  }
+
+  function draw() {
+    const rect = stage.getBoundingClientRect();
+    ctx.clearRect(0, 0, rect.width, rect.height);
+
+    ctx.fillStyle = "#020617";
+    ctx.fillRect(0, 0, rect.width, rect.height);
+
+    if (!imgLoaded) {
+      ctx.fillStyle = "#94a3b8";
+      ctx.font = "14px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("사진을 선택하면 여기에 표시됨", rect.width / 2, rect.height / 2);
+      return;
+    }
+
+    ctx.drawImage(img, view.x, view.y, view.w, view.h);
+
+    const sp = points.map(imgToScreen);
+
+    ctx.save();
+
+    ctx.strokeStyle = "rgba(56, 189, 248, 0.95)";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(sp[0].x, sp[0].y);
+    for (let i = 1; i < sp.length; i++) ctx.lineTo(sp[i].x, sp[i].y);
+    ctx.closePath();
+    ctx.stroke();
+
+    ctx.fillStyle = "rgba(56, 189, 248, 0.16)";
+    ctx.fill();
+
+    for (let i = 0; i < sp.length; i++) {
+      ctx.beginPath();
+      ctx.arc(sp[i].x, sp[i].y, 12, 0, Math.PI * 2);
+      ctx.fillStyle = "#facc15";
+      ctx.fill();
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = "#111827";
+      ctx.stroke();
+
+      ctx.fillStyle = "#020617";
+      ctx.font = "bold 12px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(String(i + 1), sp[i].x, sp[i].y);
+    }
+
+    ctx.restore();
+  }
+
+  function getPos(e) {
+    const rect = canvas.getBoundingClientRect();
+    const t = e.touches ? e.touches[0] : e;
+    return {
+      x: t.clientX - rect.left,
+      y: t.clientY - rect.top
+    };
+  }
+
+  function nearestPoint(x, y) {
+    let best = -1;
+    let bestDist = Infinity;
+
+    for (let i = 0; i < points.length; i++) {
+      const sp = imgToScreen(points[i]);
+      const d = Math.hypot(sp.x - x, sp.y - y);
+      if (d < bestDist) {
+        best = i;
+        bestDist = d;
+      }
+    }
+
+    return bestDist <= 38 ? best : -1;
+  }
+
+  function onDown(e) {
+    if (!imgLoaded) return;
+    e.preventDefault();
+    const p = getPos(e);
+    dragging = nearestPoint(p.x, p.y);
+  }
+
+  function onMove(e) {
+    if (!imgLoaded || dragging < 0) return;
+    e.preventDefault();
+    const p = getPos(e);
+    points[dragging] = screenToImg(p.x, p.y);
+    draw();
+  }
+
+  function onUp(e) {
+    dragging = -1;
+  }
+
+  canvas.addEventListener("mousedown", onDown);
+  canvas.addEventListener("mousemove", onMove);
+  window.addEventListener("mouseup", onUp);
+
+  canvas.addEventListener("touchstart", onDown, { passive: false });
+  canvas.addEventListener("touchmove", onMove, { passive: false });
+  canvas.addEventListener("touchend", onUp, { passive: false });
+  canvas.addEventListener("touchcancel", onUp, { passive: false });
+
+  function loadFile(file) {
+    if (!file) return;
+
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      img = new Image();
+      img.onload = () => {
+        imageW = img.naturalWidth;
+        imageH = img.naturalHeight;
+        imgLoaded = true;
+
+        fitView();
+        resetPoints();
+
+        resetBtn.disabled = false;
+        dewarpBtn.disabled = false;
+
+        resultBox.classList.remove("show");
+        resultImg.removeAttribute("src");
+        downloadLink.removeAttribute("href");
+
+        draw();
+      };
+      img.src = reader.result;
+    };
+
+    reader.readAsDataURL(file);
+  }
+
+  fileInput.addEventListener("change", e => loadFile(e.target.files[0]));
+  cameraInput.addEventListener("change", e => loadFile(e.target.files[0]));
+
+  cameraBtn.addEventListener("click", () => cameraInput.click());
+  resetBtn.addEventListener("click", () => resetPoints());
+
+  dewarpBtn.addEventListener("click", () => {
+    if (!imgLoaded) return;
+
+    const ordered = orderPoints(points);
+
+    const w1 = dist(ordered[0], ordered[1]);
+    const w2 = dist(ordered[3], ordered[2]);
+    const h1 = dist(ordered[0], ordered[3]);
+    const h2 = dist(ordered[1], ordered[2]);
+
+    const outW = Math.max(80, Math.round(Math.max(w1, w2)));
+    const outH = Math.max(80, Math.round(Math.max(h1, h2)));
+
+    const out = document.createElement("canvas");
+    out.width = outW;
+    out.height = outH;
+    const octx = out.getContext("2d");
+
+    octx.fillStyle = "white";
+    octx.fillRect(0, 0, outW, outH);
+
+    warpQuadToRect(octx, img, ordered, outW, outH, 42);
+
+    const dataUrl = out.toDataURL("image/png");
+
+    resultImg.src = dataUrl;
+    downloadLink.href = dataUrl;
+    resultBox.classList.add("show");
+
+    setTimeout(() => {
+      resultBox.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
+  });
+
+  function dist(a, b) {
+    return Math.hypot(a.x - b.x, a.y - b.y);
+  }
+
+  function orderPoints(pts) {
+    const arr = pts.map(p => ({ x: p.x, y: p.y }));
+    const sum = arr.map(p => p.x + p.y);
+    const diff = arr.map(p => p.y - p.x);
+
+    return [
+      arr[indexOfMin(sum)],   // top-left
+      arr[indexOfMin(diff)],  // top-right
+      arr[indexOfMax(sum)],   // bottom-right
+      arr[indexOfMax(diff)]   // bottom-left
+    ];
+  }
+
+  function indexOfMin(a) {
+    let idx = 0;
+    for (let i = 1; i < a.length; i++) if (a[i] < a[idx]) idx = i;
+    return idx;
+  }
+
+  function indexOfMax(a) {
+    let idx = 0;
+    for (let i = 1; i < a.length; i++) if (a[i] > a[idx]) idx = i;
+    return idx;
+  }
+
+  function bilinear(tl, tr, br, bl, u, v) {
+    const x =
+      tl.x * (1 - u) * (1 - v) +
+      tr.x * u * (1 - v) +
+      br.x * u * v +
+      bl.x * (1 - u) * v;
+
+    const y =
+      tl.y * (1 - u) * (1 - v) +
+      tr.y * u * (1 - v) +
+      br.y * u * v +
+      bl.y * (1 - u) * v;
+
+    return { x, y };
+  }
+
+  function warpQuadToRect(octx, sourceImg, quad, outW, outH, grid) {
+    const [tl, tr, br, bl] = quad;
+
+    for (let gy = 0; gy < grid; gy++) {
+      for (let gx = 0; gx < grid; gx++) {
+        const u0 = gx / grid;
+        const v0 = gy / grid;
+        const u1 = (gx + 1) / grid;
+        const v1 = (gy + 1) / grid;
+
+        const s00 = bilinear(tl, tr, br, bl, u0, v0);
+        const s10 = bilinear(tl, tr, br, bl, u1, v0);
+        const s11 = bilinear(tl, tr, br, bl, u1, v1);
+        const s01 = bilinear(tl, tr, br, bl, u0, v1);
+
+        const d00 = { x: u0 * outW, y: v0 * outH };
+        const d10 = { x: u1 * outW, y: v0 * outH };
+        const d11 = { x: u1 * outW, y: v1 * outH };
+        const d01 = { x: u0 * outW, y: v1 * outH };
+
+        drawTriangle(octx, sourceImg, s00, s10, s11, d00, d10, d11);
+        drawTriangle(octx, sourceImg, s00, s11, s01, d00, d11, d01);
+      }
+    }
+  }
+
+  function drawTriangle(ctx, image, s0, s1, s2, d0, d1, d2) {
+    ctx.save();
+
+    ctx.beginPath();
+    ctx.moveTo(d0.x, d0.y);
+    ctx.lineTo(d1.x, d1.y);
+    ctx.lineTo(d2.x, d2.y);
+    ctx.closePath();
+    ctx.clip();
+
+    const m = affineFromTriangles(s0, s1, s2, d0, d1, d2);
+
+    ctx.setTransform(m.a, m.b, m.c, m.d, m.e, m.f);
+    ctx.drawImage(image, 0, 0);
+
+    ctx.restore();
+  }
+
+  function affineFromTriangles(s0, s1, s2, d0, d1, d2) {
+    const sx0 = s0.x, sy0 = s0.y;
+    const sx1 = s1.x, sy1 = s1.y;
+    const sx2 = s2.x, sy2 = s2.y;
+
+    const dx0 = d0.x, dy0 = d0.y;
+    const dx1 = d1.x, dy1 = d1.y;
+    const dx2 = d2.x, dy2 = d2.y;
+
+    const denom = sx0 * (sy1 - sy2) + sx1 * (sy2 - sy0) + sx2 * (sy0 - sy1);
+
+    if (Math.abs(denom) < 0.000001) {
+      return { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 };
+    }
+
+    const a = (dx0 * (sy1 - sy2) + dx1 * (sy2 - sy0) + dx2 * (sy0 - sy1)) / denom;
+    const c = (dx0 * (sx2 - sx1) + dx1 * (sx0 - sx2) + dx2 * (sx1 - sx0)) / denom;
+    const e = (dx0 * (sx1 * sy2 - sx2 * sy1) + dx1 * (sx2 * sy0 - sx0 * sy2) + dx2 * (sx0 * sy1 - sx1 * sy0)) / denom;
+
+    const b = (dy0 * (sy1 - sy2) + dy1 * (sy2 - sy0) + dy2 * (sy0 - sy1)) / denom;
+    const d = (dy0 * (sx2 - sx1) + dy1 * (sx0 - sx2) + dy2 * (sx1 - sx0)) / denom;
+    const f = (dy0 * (sx1 * sy2 - sx2 * sy1) + dy1 * (sx2 * sy0 - sx0 * sy2) + dy2 * (sx0 * sy1 - sx1 * sy0)) / denom;
+
+    return { a, b, c, d, e, f };
+  }
+
+  window.addEventListener("resize", () => {
+    if (imgLoaded) fitView();
+    resizeCanvas();
+  });
+
+  resizeCanvas();
+})();
+</script>
+</body>
+</html>
