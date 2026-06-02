@@ -347,7 +347,7 @@
 
   <select id="filterMode">
     <option value="auto" selected>보정필터: 자동보정</option>
-    <option value="vflat">보정필터: VFlat형 박스/표</option>
+    <option value="vflat">보정필터: VFlat형 툴/표</option>
     <option value="camscanner">보정필터: CamScanner형 문서</option>
     <option value="original">보정필터: 원본</option>
     <option value="bright">보정필터: 밝게</option>
@@ -365,7 +365,7 @@
 
   <select id="detectMode">
     <option value="smart" selected>자동영역: 스캐너식</option>
-    <option value="vflat">자동영역: VFlat형 표/박스</option>
+    <option value="vflat">자동영역: VFlat형 툴/화면</option>
     <option value="camscanner">자동영역: CamScanner형 문서</option>
     <option value="paper">자동영역: 밝은 종이</option>
     <option value="edge">자동영역: 사각형/표선</option>
@@ -1249,9 +1249,11 @@
     const candidates = [];
 
     if (mode === "vflat") {
-      candidates.push(...detectByTableAndRectangleLines().map(c => ({ ...c, score: c.score + 0.35 })));
-      candidates.push(...detectByBrightBoxProjection().map(c => ({ ...c, score: c.score + 0.18 })));
-      candidates.push(...makeCenterCropCandidates().map(c => ({ ...c, score: c.score + 0.10 })));
+      // VFlat 모드: A4 종이가 아니라 엑셀/한글/웹툴 같은 프로그램 화면 안쪽 작업영역을 우선 탐지
+      candidates.push(...detectByExcelToolInnerArea().map(c => ({ ...c, score: c.score + 0.55 })));
+      candidates.push(...detectByTableAndRectangleLines().map(c => ({ ...c, score: c.score + 0.28 })));
+      candidates.push(...detectByBrightBoxProjection().map(c => ({ ...c, score: c.score + 0.12 })));
+      candidates.push(...makeCenterCropCandidates().map(c => ({ ...c, score: c.score + 0.05 })));
     } else if (mode === "camscanner") {
       candidates.push(...detectByPaperMask().map(c => ({ ...c, score: c.score + 0.28 })));
       candidates.push(...detectByOuterEdges().map(c => ({ ...c, score: c.score + 0.18 })));
@@ -1437,6 +1439,210 @@
     }
 
     return candidates;
+  }
+
+  function detectByExcelToolInnerArea() {
+    // 엑셀/한글/웹툴 화면용.
+    // 목표: 사진 안의 모니터/프로그램 창 중에서 리본, 표, 메뉴가 포함된 "툴 안쪽 작업영역" 외곽을 잡는다.
+    // A4 비율보다 넓은 화면형 사각형과 표선 밀도를 더 높게 평가한다.
+    const maxSide = 900;
+    const scale = Math.min(maxSide / imageW, maxSide / imageH, 1);
+    const w = Math.round(imageW * scale);
+    const h = Math.round(imageH * scale);
+
+    const temp = document.createElement("canvas");
+    temp.width = w;
+    temp.height = h;
+
+    const tctx = temp.getContext("2d", { willReadFrequently: true });
+    tctx.drawImage(img, 0, 0, w, h);
+
+    const data = tctx.getImageData(0, 0, w, h).data;
+
+    const gray = new Uint8Array(w * h);
+    const workMask = new Uint8Array(w * h);
+    const lineMask = new Uint8Array(w * h);
+
+    let sum = 0;
+
+    for (let i = 0, p = 0; i < data.length; i += 4, p++) {
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
+      const v = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
+      const colorDiff = Math.max(r, g, b) - Math.min(r, g, b);
+
+      gray[p] = v;
+      sum += v;
+
+      // 엑셀/툴 내부는 대체로 검은 배경보다 밝고, 모니터 색 편차가 과하지 않음
+      if (v > 72 && colorDiff < 145) {
+        workMask[p] = 1;
+      }
+    }
+
+    const avg = sum / Math.max(1, gray.length);
+
+    // 표선/텍스트 밀도 추정: 어두운 선, 격자, 문자 영역
+    for (let y = 1; y < h - 1; y++) {
+      for (let x = 1; x < w - 1; x++) {
+        const idx = y * w + x;
+        const v = gray[idx];
+
+        const gx = Math.abs(gray[idx + 1] - gray[idx - 1]);
+        const gy = Math.abs(gray[idx + w] - gray[idx - w]);
+
+        if ((gx + gy > 24 && v < avg + 45) || v < 118) {
+          lineMask[idx] = 1;
+        }
+      }
+    }
+
+    closeMask(workMask, w, h, 2);
+
+    const rowWork = new Array(h).fill(0);
+    const colWork = new Array(w).fill(0);
+    const rowLine = new Array(h).fill(0);
+    const colLine = new Array(w).fill(0);
+
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const idx = y * w + x;
+
+        if (workMask[idx]) {
+          rowWork[y]++;
+          colWork[x]++;
+        }
+
+        if (lineMask[idx]) {
+          rowLine[y]++;
+          colLine[x]++;
+        }
+      }
+    }
+
+    smoothArray(rowWork, 9);
+    smoothArray(colWork, 9);
+    smoothArray(rowLine, 7);
+    smoothArray(colLine, 7);
+
+    const candidates = [];
+
+    // 1) 밝은 툴 내부 전체 범위
+    const workRows = getRangesFromProjection(rowWork, w * 0.34, h);
+    const workCols = getRangesFromProjection(colWork, h * 0.34, w);
+
+    for (const yr of workRows.slice(0, 3)) {
+      for (const xr of workCols.slice(0, 3)) {
+        addToolCandidate(candidates, xr.start, yr.start, xr.end, yr.end, scale, "툴 내부 밝은 영역", 0.26);
+      }
+    }
+
+    // 2) 표/셀/문자 밀도가 높은 작업영역
+    const lineRows = getRangesFromProjection(rowLine, w * 0.045, h);
+    const lineCols = getRangesFromProjection(colLine, h * 0.045, w);
+
+    for (const yr of lineRows.slice(0, 4)) {
+      for (const xr of lineCols.slice(0, 4)) {
+        const padX = Math.round((xr.end - xr.start) * 0.04);
+        const padY = Math.round((yr.end - yr.start) * 0.06);
+
+        addToolCandidate(
+          candidates,
+          Math.max(0, xr.start - padX),
+          Math.max(0, yr.start - padY),
+          Math.min(w - 1, xr.end + padX),
+          Math.min(h - 1, yr.end + padY),
+          scale,
+          "툴 내부 표/셀 영역",
+          0.34
+        );
+      }
+    }
+
+    // 3) 컴포넌트 기반: 사진의 어두운 배경을 제외한 가장 큰 화면/툴 덩어리
+    const comps = connectedComponents(workMask, w, h, 8);
+
+    for (const comp of comps) {
+      addToolCandidate(
+        candidates,
+        comp.minX,
+        comp.minY,
+        comp.maxX,
+        comp.maxY,
+        scale,
+        "툴/화면 컴포넌트",
+        0.22
+      );
+    }
+
+    return candidates;
+  }
+
+  function addToolCandidate(candidates, x0, y0, x1, y1, scale, label, baseScore) {
+    const bw = x1 - x0;
+    const bh = y1 - y0;
+
+    if (bw <= 0 || bh <= 0) return;
+
+    const boxRatio = (bw * bh) / ((imageW * scale) * (imageH * scale));
+
+    // 엑셀/툴 화면은 보통 넓은 사각형이므로 너무 좁은 후보는 버림
+    if (boxRatio < 0.10 || boxRatio > 0.985) return;
+
+    let pts = [
+      { x: x0 / scale, y: y0 / scale },
+      { x: x1 / scale, y: y0 / scale },
+      { x: x1 / scale, y: y1 / scale },
+      { x: x0 / scale, y: y1 / scale }
+    ];
+
+    pts = expandPoints(pts, imageW, imageH, 0.006);
+
+    const wideScore = wideToolRatioScore(pts);
+    const rectScore = rectangleScore(pts);
+    const centerScore = centerBiasScore(pts);
+    const sizeScore = Math.min(1.45, boxRatio * 2.35);
+
+    const score =
+      baseScore +
+      0.34 * wideScore +
+      0.28 * rectScore +
+      0.20 * centerScore +
+      0.18 * sizeScore;
+
+    candidates.push({ label, score, points: pts });
+  }
+
+  function wideToolRatioScore(pts) {
+    const q = orderPoints(pts);
+    const w1 = dist(q[0], q[1]);
+    const w2 = dist(q[3], q[2]);
+    const h1 = dist(q[0], q[3]);
+    const h2 = dist(q[1], q[2]);
+
+    const ww = Math.max(1, (w1 + w2) / 2);
+    const hh = Math.max(1, (h1 + h2) / 2);
+    const ratio = ww / hh;
+
+    // 엑셀/프로그램 화면형은 가로로 긴 사각형을 우선
+    const targets = [1.25, 1.45, 1.60, 1.78, 2.0, 2.35];
+
+    let best = 0.45;
+
+    for (const target of targets) {
+      const diff = Math.abs(ratio - target);
+      let score;
+      if (diff < 0.14) score = 1.45;
+      else if (diff < 0.28) score = 1.20;
+      else if (diff < 0.48) score = 0.95;
+      else if (diff < 0.75) score = 0.70;
+      else score = 0.45;
+
+      best = Math.max(best, score);
+    }
+
+    return best;
   }
 
   function detectByTableAndRectangleLines() {
