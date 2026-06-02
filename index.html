@@ -1904,7 +1904,7 @@
       const data = tctx.getImageData(0, 0, w, h).data;
 
       const grayBg = estimateOuterGrayBackground(data, w, h);
-      const whiteThreshold = Math.max(142, grayBg + 20);
+      const whiteThreshold = 190;
 
       const row = new Array(h).fill(0);
       const col = new Array(w).fill(0);
@@ -1938,8 +1938,8 @@
       smoothArray(col, 9);
 
       // 흰 슬라이드는 화면에서 넓은 연속 구간을 만든다.
-      let yr = largestContinuousRange(row, w * 0.38, Math.round(h * 0.35));
-      let xr = largestContinuousRange(col, h * 0.30, Math.round(w * 0.35));
+      let yr = largestContinuousRange(row, w * 0.20, Math.round(h * 0.20));
+      let xr = largestContinuousRange(col, h * 0.20, Math.round(w * 0.20));
 
       // 흐린 사진용 완화
       if (!yr) yr = largestContinuousRange(row, w * 0.28, Math.round(h * 0.28));
