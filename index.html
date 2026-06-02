@@ -1256,12 +1256,11 @@
       candidates.push(...makeCenterCropCandidates().map(c => ({ ...c, score: c.score + 0.05 })));
     } else if (mode === "camscanner") {
       // 문서 모드:
-      // 기본좌표로 대략 잡고, 그 주변에서 회색→흰색 슬라이드 경계를 찾아 미세 보정.
-      // 보정필터/화질/저장 파이프라인은 건드리지 않음.
-      candidates.push({ label: "문서 경계 보정", score: 10.0, points: makeDocumentRefinedPoints() });
-      candidates.push({ label: "문서 기본 좌표", score: 9.0, points: makeDocumentPresetPoints() });
+      // 네가 보완한 결과 기준. 회색 배경 위 흰색 슬라이드 외곽을 넓게 잡는 기본좌표.
+      // 경계 자동보정은 안쪽으로 먹는 문제가 있어 제거하고, 안정 좌표를 최우선 적용.
+      candidates.push({ label: "문서 기본 좌표", score: 10.0, points: makeDocumentPresetPoints() });
 
-      // 기존 탐지는 보조 후보로만 유지
+      // 기존 탐지는 후보 변경용 보조로만 유지
       candidates.push(...detectByPaperMask().map(c => ({ ...c, score: c.score + 0.10 })));
       candidates.push(...detectByOuterEdges().map(c => ({ ...c, score: c.score + 0.08 })));
       candidates.push({ label: "중앙 A4", score: 0.01, points: makeA4CenterPoints() });
@@ -1868,12 +1867,12 @@
   }
 
   function makeDocumentPresetPoints() {
-    // 정책표/PPT 문서 기본 좌표.
-    // 이 좌표는 최종값이 아니라 경계 보정의 시작점이다.
-    const left = imageW * 0.075;
-    const right = imageW * 0.925;
-    const top = imageH * 0.075;
-    const bottom = imageH * 0.915;
+    // 네 보완본 기준 문서 좌표.
+    // 회색 배경 위 흰색 슬라이드 외곽을 넓게 포함한다.
+    const left = imageW * 0.055;
+    const right = imageW * 0.945;
+    const top = imageH * 0.060;
+    const bottom = imageH * 0.925;
 
     return [
       { x: left, y: top },
@@ -1881,217 +1880,6 @@
       { x: right, y: bottom },
       { x: left, y: bottom }
     ];
-  }
-
-  function makeDocumentRefinedPoints() {
-    // 안정형 자동탐지:
-    // 기본좌표 주변만 훑어서 회색 배경 → 흰색 슬라이드 경계에 붙인다.
-    // 실패하면 기본좌표를 그대로 반환한다.
-    const preset = makeDocumentPresetPoints();
-
-    try {
-      const maxSide = 760;
-      const scale = Math.min(maxSide / imageW, maxSide / imageH, 1);
-      const w = Math.max(1, Math.round(imageW * scale));
-      const h = Math.max(1, Math.round(imageH * scale));
-
-      const temp = document.createElement("canvas");
-      temp.width = w;
-      temp.height = h;
-
-      const tctx = temp.getContext("2d", { willReadFrequently: true });
-      tctx.drawImage(img, 0, 0, w, h);
-
-      const data = tctx.getImageData(0, 0, w, h).data;
-
-      const p = orderPoints(preset).map(pt => ({
-        x: pt.x * scale,
-        y: pt.y * scale
-      }));
-
-      const px0 = p[0].x;
-      const py0 = p[0].y;
-      const px1 = p[2].x;
-      const py1 = p[2].y;
-
-      const bg = estimateLocalGrayBackground(data, w, h, px0, py0, px1, py1);
-      const whiteThreshold = Math.max(138, bg + 16);
-
-      const searchX = Math.round(w * 0.075);
-      const searchY = Math.round(h * 0.075);
-
-      const left = findVerticalWhiteBoundary(
-        data, w, h,
-        Math.max(0, px0 - searchX),
-        Math.min(w - 1, px0 + searchX),
-        py0, py1,
-        whiteThreshold,
-        "left"
-      );
-
-      const right = findVerticalWhiteBoundary(
-        data, w, h,
-        Math.max(0, px1 - searchX),
-        Math.min(w - 1, px1 + searchX),
-        py0, py1,
-        whiteThreshold,
-        "right"
-      );
-
-      const top = findHorizontalWhiteBoundary(
-        data, w, h,
-        px0, px1,
-        Math.max(0, py0 - searchY),
-        Math.min(h - 1, py0 + searchY),
-        whiteThreshold,
-        "top"
-      );
-
-      const bottom = findHorizontalWhiteBoundary(
-        data, w, h,
-        px0, px1,
-        Math.max(0, py1 - searchY),
-        Math.min(h - 1, py1 + searchY),
-        whiteThreshold,
-        "bottom"
-      );
-
-      if (left === null || right === null || top === null || bottom === null) {
-        return preset;
-      }
-
-      if ((right - left) < w * 0.55 || (bottom - top) < h * 0.45) {
-        return preset;
-      }
-
-      return [
-        { x: left / scale, y: top / scale },
-        { x: right / scale, y: top / scale },
-        { x: right / scale, y: bottom / scale },
-        { x: left / scale, y: bottom / scale }
-      ];
-    } catch (err) {
-      console.warn("document refine failed", err);
-      return preset;
-    }
-  }
-
-  function estimateLocalGrayBackground(data, w, h, x0, y0, x1, y1) {
-    const vals = [];
-
-    const sample = (x, y) => {
-      x = clamp(Math.round(x), 0, w - 1);
-      y = clamp(Math.round(y), 0, h - 1);
-      const i = (y * w + x) * 4;
-      const v = (data[i] + data[i + 1] + data[i + 2]) / 3;
-      if (v > 60 && v < 225) vals.push(v);
-    };
-
-    const pad = Math.round(Math.min(w, h) * 0.035);
-
-    for (let x = x0; x <= x1; x += 12) {
-      sample(x, y0 - pad);
-      sample(x, y1 + pad);
-    }
-
-    for (let y = y0; y <= y1; y += 12) {
-      sample(x0 - pad, y);
-      sample(x1 + pad, y);
-    }
-
-    if (!vals.length) return 135;
-
-    vals.sort((a, b) => a - b);
-    return vals[Math.floor(vals.length * 0.50)];
-  }
-
-  function isWhiteSlidePixel(data, w, h, x, y, threshold) {
-    x = clamp(Math.round(x), 0, w - 1);
-    y = clamp(Math.round(y), 0, h - 1);
-
-    const i = (y * w + x) * 4;
-    const r = data[i];
-    const g = data[i + 1];
-    const b = data[i + 2];
-
-    const v = (r + g + b) / 3;
-    const diff = Math.max(r, g, b) - Math.min(r, g, b);
-
-    return v >= threshold && diff < 115;
-  }
-
-  function findVerticalWhiteBoundary(data, w, h, sx0, sx1, y0, y1, threshold, side) {
-    sx0 = clamp(Math.round(sx0), 0, w - 1);
-    sx1 = clamp(Math.round(sx1), 0, w - 1);
-    y0 = clamp(Math.round(y0), 0, h - 1);
-    y1 = clamp(Math.round(y1), 0, h - 1);
-
-    const innerTop = Math.round(y0 + (y1 - y0) * 0.08);
-    const innerBottom = Math.round(y1 - (y1 - y0) * 0.08);
-    const needed = Math.max(20, Math.round((innerBottom - innerTop) * 0.50 / 3));
-
-    let bestX = null;
-    let bestScore = -1;
-
-    for (let x = sx0; x <= sx1; x++) {
-      let whiteCount = 0;
-      let transitionScore = 0;
-
-      for (let y = innerTop; y <= innerBottom; y += 3) {
-        const nowWhite = isWhiteSlidePixel(data, w, h, x, y, threshold);
-        const neighborX = side === "left" ? x - 4 : x + 4;
-        const outsideWhite = isWhiteSlidePixel(data, w, h, neighborX, y, threshold);
-
-        if (nowWhite) whiteCount++;
-        if (nowWhite && !outsideWhite) transitionScore += 2;
-      }
-
-      const score = whiteCount + transitionScore;
-
-      if (whiteCount >= needed && score > bestScore) {
-        bestScore = score;
-        bestX = x;
-      }
-    }
-
-    return bestX;
-  }
-
-  function findHorizontalWhiteBoundary(data, w, h, x0, x1, sy0, sy1, threshold, side) {
-    x0 = clamp(Math.round(x0), 0, w - 1);
-    x1 = clamp(Math.round(x1), 0, w - 1);
-    sy0 = clamp(Math.round(sy0), 0, h - 1);
-    sy1 = clamp(Math.round(sy1), 0, h - 1);
-
-    const innerLeft = Math.round(x0 + (x1 - x0) * 0.08);
-    const innerRight = Math.round(x1 - (x1 - x0) * 0.08);
-    const needed = Math.max(20, Math.round((innerRight - innerLeft) * 0.50 / 3));
-
-    let bestY = null;
-    let bestScore = -1;
-
-    for (let y = sy0; y <= sy1; y++) {
-      let whiteCount = 0;
-      let transitionScore = 0;
-
-      for (let x = innerLeft; x <= innerRight; x += 3) {
-        const nowWhite = isWhiteSlidePixel(data, w, h, x, y, threshold);
-        const neighborY = side === "top" ? y - 4 : y + 4;
-        const outsideWhite = isWhiteSlidePixel(data, w, h, x, neighborY, threshold);
-
-        if (nowWhite) whiteCount++;
-        if (nowWhite && !outsideWhite) transitionScore += 2;
-      }
-
-      const score = whiteCount + transitionScore;
-
-      if (whiteCount >= needed && score > bestScore) {
-        bestScore = score;
-        bestY = y;
-      }
-    }
-
-    return bestY;
   }
 
   function makeCenterCropCandidates() {
