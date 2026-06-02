@@ -364,15 +364,10 @@
   </select>
 
   <select id="detectMode">
-    <option value="smart" selected>자동영역: 스캐너식</option>
-    <option value="vflat">자동영역: VFlat형 툴/화면</option>
-    <option value="camscanner">자동영역: 문서</option>
-    <option value="paper">자동영역: 밝은 종이</option>
-    <option value="edge">자동영역: 사각형/표선</option>
-    <option value="a4">자동영역: 중앙 A4</option>
+    <option value="camscanner" selected>문서</option>
   </select>
 
-  <button id="cycleDetectBtn" disabled>영역 후보 변경</button>
+  <button id="cycleDetectBtn" disabled style="display:none">영역 후보 변경</button>
 </div>
 <input type="hidden" id="sortMode" value="selected" />
 <button id="resortBtn" style="display:none" disabled>재정렬</button>
@@ -1255,13 +1250,13 @@
       candidates.push(...detectByBrightBoxProjection().map(c => ({ ...c, score: c.score + 0.12 })));
       candidates.push(...makeCenterCropCandidates().map(c => ({ ...c, score: c.score + 0.05 })));
     } else if (mode === "camscanner") {
-      // 문서 모드:
-      // 회색 바탕 안의 큰 흰색 슬라이드를 찾는다.
-      // 실패하면 기본 좌표로 fallback.
-      candidates.push({ label: "회색 바탕 속 흰 슬라이드", score: 10.0, points: detectWhiteSlideOnGrayBackground() });
+      // 문서 모드 전용:
+      // 회색 바탕 안의 큰 흰색 슬라이드를 우선 탐지.
+      // 실패하면 fallback 기본좌표 사용.
+      candidates.push({ label: "문서", score: 10.0, points: detectWhiteSlideOnGrayBackground() });
       candidates.push({ label: "문서 기본 좌표", score: 8.0, points: makeDocumentPresetPoints() });
 
-      // 기존 탐지는 후보 변경용 보조로만 유지
+      // 기존 탐지는 보조 후보로만 유지
       candidates.push(...detectByPaperMask().map(c => ({ ...c, score: c.score + 0.10 })));
       candidates.push(...detectByOuterEdges().map(c => ({ ...c, score: c.score + 0.08 })));
       candidates.push({ label: "중앙 A4", score: 0.01, points: makeA4CenterPoints() });
@@ -1883,9 +1878,8 @@
   }
 
   function detectWhiteSlideOnGrayBackground() {
-    // 핵심 규칙:
-    // 사진에는 회색 바탕이 있고, 그 안에 큰 흰색 슬라이드가 있다.
-    // 그래서 내부 표선/대외비/텍스트가 아니라 "큰 흰 면"의 바깥 경계를 찾는다.
+    // 회색 바탕 안의 큰 흰색 슬라이드 탐지.
+    // 내부 표선/대외비/텍스트보다 큰 흰색 면과 외곽을 우선한다.
     const fallback = makeDocumentPresetPoints();
 
     try {
@@ -1909,7 +1903,6 @@
       const row = new Array(h).fill(0);
       const col = new Array(w).fill(0);
 
-      // 위쪽 리본/아래 검정바 영향을 줄이되, 슬라이드가 위에 붙는 경우도 고려해 넓게 스캔
       const scanLeft = Math.round(w * 0.01);
       const scanRight = Math.round(w * 0.99);
       const scanTop = Math.round(h * 0.04);
@@ -1925,9 +1918,7 @@
           const v = (r + g + b) / 3;
           const diff = Math.max(r, g, b) - Math.min(r, g, b);
 
-          // 흰 슬라이드: 회색 바탕보다 밝고 색 편차가 크지 않다.
-          // 빨간 대외비, 노란 안내바, 파란 글씨는 diff가 커서 제외된다.
-          if (v >= whiteThreshold && diff < 105) {
+          if (v >= whiteThreshold && diff < 115) {
             row[y] += 2;
             col[x] += 2;
           }
@@ -1937,24 +1928,18 @@
       smoothArray(row, 9);
       smoothArray(col, 9);
 
-      // 흰 슬라이드는 화면에서 넓은 연속 구간을 만든다.
       let yr = largestContinuousRange(row, w * 0.20, Math.round(h * 0.20));
       let xr = largestContinuousRange(col, h * 0.20, Math.round(w * 0.20));
 
-      // 흐린 사진용 완화
-      if (!yr) yr = largestContinuousRange(row, w * 0.28, Math.round(h * 0.28));
-      if (!xr) xr = largestContinuousRange(col, h * 0.22, Math.round(w * 0.28));
-
       if (!yr || !xr) return fallback;
 
-      let x0 = Math.max(0, xr.start - 4);
-      let x1 = Math.min(w - 1, xr.end + 4);
-      let y0 = Math.max(0, yr.start - 4);
-      let y1 = Math.min(h - 1, yr.end + 4);
+      const x0 = Math.max(0, xr.start - 4);
+      const x1 = Math.min(w - 1, xr.end + 4);
+      const y0 = Math.max(0, yr.start - 4);
+      const y1 = Math.min(h - 1, yr.end + 4);
 
-      // 너무 작거나 말도 안 되는 박스는 버림
-      if ((x1 - x0) < w * 0.50 || (y1 - y0) < h * 0.45) return fallback;
-      if ((x1 - x0) > w * 0.98 || (y1 - y0) > h * 0.98) return fallback;
+      if ((x1 - x0) < w * 0.45 || (y1 - y0) < h * 0.38) return fallback;
+      if ((x1 - x0) > w * 0.99 || (y1 - y0) > h * 0.99) return fallback;
 
       return [
         { x: x0 / scale, y: y0 / scale },
@@ -1981,11 +1966,9 @@
       const v = (r + g + b) / 3;
       const diff = Math.max(r, g, b) - Math.min(r, g, b);
 
-      // 회색 바탕 후보: 너무 어둡거나 너무 흰 영역은 제외
-      if (v > 75 && v < 220 && diff < 80) vals.push(v);
+      if (v > 75 && v < 220 && diff < 90) vals.push(v);
     };
 
-    // 가장자리와 화면 주변부에서 회색 바탕 샘플링
     for (let x = 0; x < w; x += 10) {
       sample(x, h * 0.08);
       sample(x, h * 0.94);
@@ -1999,8 +1982,6 @@
     if (!vals.length) return 135;
 
     vals.sort((a, b) => a - b);
-
-    // 중앙값보다 약간 밝은 쪽을 회색 바탕 기준으로 사용
     return vals[Math.floor(vals.length * 0.58)];
   }
 
