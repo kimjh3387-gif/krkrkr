@@ -467,12 +467,12 @@
 
 <div class="scan-overlay" id="scanOverlay">
   <div class="scan-box">
-    <div class="scan-title" id="scanOverlayText">문서 외곽 찾는 중...</div>
+    <div class="scan-title" id="scanOverlayText">문서 외곽선 찾는 중...</div>
     <div class="scan-paper">
       <div class="scan-page"></div>
       <div class="scan-line"></div>
     </div>
-    <div class="scan-dots">흑백 탐지 · 밝은 슬라이드 추출 · 외곽 계산</div>
+    <div class="scan-dots">외곽선 탐지 · 사각형 후보 · 문서 외곽 계산</div>
   </div>
 </div>
 
@@ -583,7 +583,7 @@
     progressBar.style.width = `${pct}%`;
   }
 
-  function showScanOverlay(text = "문서 외곽 찾는 중...") {
+  function showScanOverlay(text = "문서 외곽선 찾는 중...") {
     if (!scanOverlay) return;
     scanOverlayText.textContent = text;
     scanOverlay.classList.add("show");
@@ -984,7 +984,7 @@
     shareBtn.disabled = true;
     resortBtn.disabled = true;
     setProgress(true, 0);
-    showScanOverlay("문서 외곽 찾는 중...");
+    showScanOverlay("문서 외곽선 찾는 중...");
 
     const orderedFiles = sortFileList(selected);
 
@@ -1362,9 +1362,9 @@
       candidates.push(...makeCenterCropCandidates().map(c => ({ ...c, score: c.score + 0.05 })));
     } else if (mode === "camscanner") {
       // 문서 전용:
-      // 탐지용 흑백 변환 → 밝은 슬라이드 추출 → 내부 구멍 메움 → 가장 큰 밝은 사각형 선택.
-      // fallback 좌표 없음. 탐지 실패 시 중앙 A4만 후보로 표시하지 않고 실패 메시지를 위해 빈 후보 처리.
-      const doc = detectDocumentByGrayBinarySlide();
+      // CamScanner류에 가까운 외곽선/컨투어 방식.
+      // 밝은 내부 영역이 아니라, 회색 배경 위 흰 슬라이드의 바깥 사각형을 찾는다.
+      const doc = detectDocumentByContourScanner();
       if (doc) candidates.push({ label: "문서", score: 10.0, points: doc });
     } else {
       if (mode === "smart" || mode === "paper") {
@@ -2070,6 +2070,280 @@
         if (count >= need) mask[idx] = 1;
       }
     }
+  }
+
+  function detectDocumentByContourScanner() {
+    // 외곽선 기반 문서 탐지.
+    // 원리:
+    // 1) 흑백 변환
+    // 2) Canny edge
+    // 3) morphology close/dilate로 끊긴 슬라이드 외곽선 연결
+    // 4) 큰 사각형 contour 중 PPT 슬라이드에 가장 가까운 것 선택
+    if (!window.cvReady || typeof cv === "undefined") {
+      console.warn("OpenCV not ready");
+      return null;
+    }
+
+    let src = null;
+    let gray = null;
+    let blur = null;
+    let edges = null;
+    let closed = null;
+    let kernelClose = null;
+    let kernelDilate = null;
+    let contours = null;
+    let hierarchy = null;
+
+    try {
+      const maxSide = 1000;
+      const scale = Math.min(maxSide / imageW, maxSide / imageH, 1);
+      const w = Math.max(1, Math.round(imageW * scale));
+      const h = Math.max(1, Math.round(imageH * scale));
+
+      const temp = document.createElement("canvas");
+      temp.width = w;
+      temp.height = h;
+      const tctx = temp.getContext("2d", { willReadFrequently: true });
+      tctx.drawImage(img, 0, 0, w, h);
+
+      src = cv.imread(temp);
+      gray = new cv.Mat();
+      blur = new cv.Mat();
+      edges = new cv.Mat();
+      closed = new cv.Mat();
+      kernelClose = cv.Mat.ones(11, 11, cv.CV_8U);
+      kernelDilate = cv.Mat.ones(3, 3, cv.CV_8U);
+      contours = new cv.MatVector();
+      hierarchy = new cv.Mat();
+
+      cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+      cv.GaussianBlur(gray, blur, new cv.Size(5, 5), 0);
+
+      // PPT 슬라이드 외곽선은 약하지만 길게 이어져 있음.
+      cv.Canny(blur, edges, 20, 75);
+      cv.morphologyEx(edges, closed, cv.MORPH_CLOSE, kernelClose);
+      cv.dilate(closed, closed, kernelDilate);
+
+      cv.findContours(closed, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+
+      const imageArea = w * h;
+      let best = null;
+      let bestScore = -Infinity;
+
+      for (let i = 0; i < contours.size(); i++) {
+        const cnt = contours.get(i);
+        const area = cv.contourArea(cnt);
+        const rect = cv.boundingRect(cnt);
+
+        const bw = rect.width;
+        const bh = rect.height;
+        const boxArea = bw * bh;
+        const boxRatio = boxArea / imageArea;
+
+        // 너무 작거나 화면 전체에 가까운 후보 제거
+        if (bw < w * 0.45 || bh < h * 0.38 || boxRatio < 0.18 || boxRatio > 0.96) {
+          cnt.delete();
+          continue;
+        }
+
+        const peri = cv.arcLength(cnt, true);
+        const approx = new cv.Mat();
+
+        for (const eps of [0.01, 0.015, 0.02, 0.03, 0.045, 0.06]) {
+          cv.approxPolyDP(cnt, approx, eps * peri, true);
+
+          let pts;
+
+          if (approx.rows === 4) {
+            pts = matToPoints(approx).map(p => ({ x: p.x / scale, y: p.y / scale }));
+          } else {
+            // 4각형 근사가 안 되면 boundingRect 후보도 검토
+            pts = [
+              { x: rect.x / scale, y: rect.y / scale },
+              { x: (rect.x + rect.width) / scale, y: rect.y / scale },
+              { x: (rect.x + rect.width) / scale, y: (rect.y + rect.height) / scale },
+              { x: rect.x / scale, y: (rect.y + rect.height) / scale }
+            ];
+          }
+
+          pts = expandPoints(orderPoints(pts), imageW, imageH, 0.004);
+
+          const q = orderPoints(pts);
+          const ratio = quadWidthHeightRatio(q);
+          const areaScore = Math.min(1.7, quadArea(q) / (imageW * imageH) * 2.0);
+          const rectScore = rectangleScore(q);
+          const centerScore = centerBiasScore(q);
+          const ratioScore = pptSlideRatioScore(ratio);
+          const whiteness = estimateInsideWhiteness(temp, q, scale);
+
+          const score =
+            0.30 * areaScore +
+            0.25 * rectScore +
+            0.18 * centerScore +
+            0.15 * ratioScore +
+            0.12 * whiteness;
+
+          if (score > bestScore) {
+            bestScore = score;
+            best = q;
+          }
+        }
+
+        approx.delete();
+        cnt.delete();
+      }
+
+      // contour가 약해서 실패하면 선 투영 방식으로 한 번 더 시도
+      if (!best) {
+        best = detectDocumentByLineProjection(temp, scale);
+      }
+
+      return best;
+    } catch (err) {
+      console.warn("contour document detection failed", err);
+      return null;
+    } finally {
+      if (src) src.delete();
+      if (gray) gray.delete();
+      if (blur) blur.delete();
+      if (edges) edges.delete();
+      if (closed) closed.delete();
+      if (kernelClose) kernelClose.delete();
+      if (kernelDilate) kernelDilate.delete();
+      if (contours) contours.delete();
+      if (hierarchy) hierarchy.delete();
+    }
+  }
+
+  function quadWidthHeightRatio(q) {
+    q = orderPoints(q);
+    const top = dist(q[0], q[1]);
+    const bottom = dist(q[3], q[2]);
+    const left = dist(q[0], q[3]);
+    const right = dist(q[1], q[2]);
+    const ww = Math.max(1, (top + bottom) / 2);
+    const hh = Math.max(1, (left + right) / 2);
+    return ww / hh;
+  }
+
+  function pptSlideRatioScore(ratio) {
+    // PPT 슬라이드/모니터 촬영 문서는 대체로 가로형 1.25~1.8 근처.
+    const targets = [1.25, 1.33, 1.45, 1.6, 1.78];
+    let best = 0.4;
+
+    for (const t of targets) {
+      const diff = Math.abs(ratio - t);
+      if (diff < 0.10) best = Math.max(best, 1.45);
+      else if (diff < 0.20) best = Math.max(best, 1.25);
+      else if (diff < 0.35) best = Math.max(best, 1.0);
+      else if (diff < 0.55) best = Math.max(best, 0.75);
+    }
+
+    return best;
+  }
+
+  function estimateInsideWhiteness(canvasEl, q, scale) {
+    const c = canvasEl.getContext("2d", { willReadFrequently: true });
+    const w = canvasEl.width;
+    const h = canvasEl.height;
+    const data = c.getImageData(0, 0, w, h).data;
+
+    const xs = q.map(p => p.x * scale);
+    const ys = q.map(p => p.y * scale);
+
+    const x0 = clamp(Math.round(Math.min(...xs)), 0, w - 1);
+    const x1 = clamp(Math.round(Math.max(...xs)), 0, w - 1);
+    const y0 = clamp(Math.round(Math.min(...ys)), 0, h - 1);
+    const y1 = clamp(Math.round(Math.max(...ys)), 0, h - 1);
+
+    let bright = 0;
+    let total = 0;
+
+    for (let y = y0; y <= y1; y += 8) {
+      for (let x = x0; x <= x1; x += 8) {
+        const i = (y * w + x) * 4;
+        const v = (data[i] + data[i + 1] + data[i + 2]) / 3;
+        if (v > 175) bright++;
+        total++;
+      }
+    }
+
+    if (!total) return 0.5;
+    return Math.min(1.4, bright / total * 1.6);
+  }
+
+  function detectDocumentByLineProjection(canvasEl, scale) {
+    // contour 실패시 백업: 긴 수평/수직 경계를 투영으로 찾음.
+    const c = canvasEl.getContext("2d", { willReadFrequently: true });
+    const w = canvasEl.width;
+    const h = canvasEl.height;
+    const data = c.getImageData(0, 0, w, h).data;
+
+    const rowEdge = new Array(h).fill(0);
+    const colEdge = new Array(w).fill(0);
+
+    for (let y = 2; y < h - 2; y++) {
+      for (let x = 2; x < w - 2; x++) {
+        const idx = (y * w + x) * 4;
+        const v = (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
+
+        const idxR = (y * w + (x + 2)) * 4;
+        const idxL = (y * w + (x - 2)) * 4;
+        const idxD = ((y + 2) * w + x) * 4;
+        const idxU = ((y - 2) * w + x) * 4;
+
+        const vr = (data[idxR] + data[idxR + 1] + data[idxR + 2]) / 3;
+        const vl = (data[idxL] + data[idxL + 1] + data[idxL + 2]) / 3;
+        const vd = (data[idxD] + data[idxD + 1] + data[idxD + 2]) / 3;
+        const vu = (data[idxU] + data[idxU + 1] + data[idxU + 2]) / 3;
+
+        const gx = Math.abs(vr - vl);
+        const gy = Math.abs(vd - vu);
+
+        if (gy > 16 && v > 105) rowEdge[y]++;
+        if (gx > 16 && v > 105) colEdge[x]++;
+      }
+    }
+
+    smoothArray(rowEdge, 9);
+    smoothArray(colEdge, 9);
+
+    const top = firstStrongLine(rowEdge, h * 0.03, h * 0.35, w * 0.22);
+    const bottom = lastStrongLine(rowEdge, h * 0.55, h * 0.96, w * 0.22);
+    const left = firstStrongLine(colEdge, w * 0.02, w * 0.35, h * 0.20);
+    const right = lastStrongLine(colEdge, w * 0.60, w * 0.98, h * 0.20);
+
+    if (top === null || bottom === null || left === null || right === null) return null;
+    if (right - left < w * 0.45 || bottom - top < h * 0.35) return null;
+
+    return [
+      { x: left / scale, y: top / scale },
+      { x: right / scale, y: top / scale },
+      { x: right / scale, y: bottom / scale },
+      { x: left / scale, y: bottom / scale }
+    ];
+  }
+
+  function firstStrongLine(arr, from, to, threshold) {
+    from = Math.max(0, Math.round(from));
+    to = Math.min(arr.length - 1, Math.round(to));
+
+    for (let i = from; i <= to; i++) {
+      if (arr[i] >= threshold) return i;
+    }
+
+    return null;
+  }
+
+  function lastStrongLine(arr, from, to, threshold) {
+    from = Math.max(0, Math.round(from));
+    to = Math.min(arr.length - 1, Math.round(to));
+
+    for (let i = to; i >= from; i--) {
+      if (arr[i] >= threshold) return i;
+    }
+
+    return null;
   }
 
   function makeCenterCropCandidates() {
