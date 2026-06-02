@@ -262,8 +262,8 @@
 
     #magnifier {
       position: fixed;
-      width: 80px;
-      height: 80px;
+      width: 60px;
+      height: 60px;
       border-radius: 50%;
       border: 2px solid rgba(255,255,255,0.95);
       background: #000;
@@ -367,9 +367,9 @@
   </select>
 
   <select id="detectMode">
-    <option value="smart" selected>자동영역: 스마트</option>
+    <option value="smart" selected>자동영역: 스캐너식</option>
     <option value="paper">자동영역: 밝은 종이</option>
-    <option value="edge">자동영역: 외곽선</option>
+    <option value="edge">자동영역: 사각형/표선</option>
     <option value="a4">자동영역: 중앙 A4</option>
   </select>
 
@@ -505,8 +505,8 @@
     canvas.style.height = r.height + "px";
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    magnifier.width = 80 * dpr;
-    magnifier.height = 80 * dpr;
+    magnifier.width = 60 * dpr;
+    magnifier.height = 60 * dpr;
     magCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     if (loaded) fitView();
@@ -625,8 +625,8 @@
   }
 
   function showMagnifier(touchX, touchY, imgPoint) {
-    const size = 80;
-    const zoom = 0.60;
+    const size = 60;
+    const zoom = 0.45;
     const sourceSize = size / zoom;
 
     let left = touchX - size / 2;
@@ -1249,22 +1249,26 @@
 
     if (mode === "smart" || mode === "paper") {
       candidates.push(...detectByPaperMask());
+      candidates.push(...detectByBrightBoxProjection());
     }
 
     if (mode === "smart" || mode === "edge") {
       candidates.push(...detectByOuterEdges());
+      candidates.push(...detectByTableAndRectangleLines());
     }
 
+    // 정책표/엑셀 화면용 백업 후보
+    candidates.push(...makeCenterCropCandidates());
     candidates.push({ label: "중앙 A4", score: 0.01, points: makeA4CenterPoints() });
 
     return dedupeCandidates(candidates)
       .filter(c => isValidQuad(c.points))
       .sort((a, b) => b.score - a.score)
-      .slice(0, 6);
+      .slice(0, 10);
   }
 
   function detectByPaperMask() {
-    const maxSide = 760;
+    const maxSide = 820;
     const scale = Math.min(maxSide / imageW, maxSide / imageH, 1);
     const w = Math.round(imageW * scale);
     const h = Math.round(imageH * scale);
@@ -1295,10 +1299,11 @@
     const std = Math.sqrt(variance);
 
     const thresholds = [
-      Math.max(90, mean + std * 0.05),
-      Math.max(105, mean + std * 0.22),
-      Math.max(120, mean + std * 0.40),
-      Math.max(135, mean + std * 0.58)
+      Math.max(82, mean + std * 0.00),
+      Math.max(96, mean + std * 0.16),
+      Math.max(112, mean + std * 0.32),
+      Math.max(128, mean + std * 0.50),
+      Math.max(144, mean + std * 0.68)
     ];
 
     const candidates = [];
@@ -1313,10 +1318,10 @@
         }
       }
 
-      closeMask(mask, w, h, 2);
+      closeMask(mask, w, h, 3);
       removeIsolatedNoise(mask, w, h);
 
-      const comps = connectedComponents(mask, w, h, 6);
+      const comps = connectedComponents(mask, w, h, 8);
 
       for (const comp of comps) {
         const bw = comp.maxX - comp.minX + 1;
@@ -1324,8 +1329,8 @@
         const boxRatio = (bw * bh) / (w * h);
         const areaRatio = comp.count / (w * h);
 
-        if (bw < w * 0.22 || bh < h * 0.22) continue;
-        if (boxRatio > 0.96) continue;
+        if (bw < w * 0.18 || bh < h * 0.18) continue;
+        if (boxRatio > 0.985) continue;
 
         let pts = [
           { x: comp.minX / scale, y: comp.minY / scale },
@@ -1337,13 +1342,332 @@
         pts = expandPoints(pts, imageW, imageH, 0.008);
 
         const a4 = a4RatioScore(pts);
+        const rect = rectangleScore(pts);
         const center = centerBiasScore(pts);
         const fill = Math.min(1.35, areaRatio / Math.max(0.001, boxRatio));
-        const sizeScore = Math.min(1.35, boxRatio * 2.2);
-        const score = 0.42 * a4 + 0.25 * center + 0.20 * fill + 0.13 * sizeScore;
+        const sizeScore = Math.min(1.35, boxRatio * 2.4);
+        const score = 0.30 * a4 + 0.24 * rect + 0.20 * center + 0.15 * fill + 0.11 * sizeScore;
 
-        candidates.push({ label: `밝은 종이 ${Math.round(th)}`, score, points: pts });
+        candidates.push({ label: `밝은 면적 ${Math.round(th)}`, score, points: pts });
       }
+    }
+
+    return candidates;
+  }
+
+  function detectByBrightBoxProjection() {
+    const maxSide = 780;
+    const scale = Math.min(maxSide / imageW, maxSide / imageH, 1);
+    const w = Math.round(imageW * scale);
+    const h = Math.round(imageH * scale);
+
+    const temp = document.createElement("canvas");
+    temp.width = w;
+    temp.height = h;
+
+    const tctx = temp.getContext("2d", { willReadFrequently: true });
+    tctx.drawImage(img, 0, 0, w, h);
+
+    const data = tctx.getImageData(0, 0, w, h).data;
+    const row = new Array(h).fill(0);
+    const col = new Array(w).fill(0);
+
+    let total = 0;
+    let count = 0;
+
+    for (let i = 0; i < data.length; i += 4) {
+      total += (data[i] + data[i + 1] + data[i + 2]) / 3;
+      count++;
+    }
+
+    const avg = total / Math.max(1, count);
+    const threshold = Math.max(95, avg + 8);
+
+    for (let y = 0; y < h; y += 2) {
+      for (let x = 0; x < w; x += 2) {
+        const i = (y * w + x) * 4;
+        const r = data[i], g = data[i + 1], b = data[i + 2];
+        const v = (r + g + b) / 3;
+        const diff = Math.max(r, g, b) - Math.min(r, g, b);
+
+        if (v > threshold && diff < 130) {
+          row[y]++;
+          col[x]++;
+        }
+      }
+    }
+
+    smoothArray(row, 7);
+    smoothArray(col, 7);
+
+    const rowRanges = getRangesFromProjection(row, w * 0.08, h);
+    const colRanges = getRangesFromProjection(col, h * 0.08, w);
+
+    const candidates = [];
+
+    for (const yr of rowRanges.slice(0, 4)) {
+      for (const xr of colRanges.slice(0, 4)) {
+        const bw = xr.end - xr.start;
+        const bh = yr.end - yr.start;
+        if (bw < w * 0.20 || bh < h * 0.20) continue;
+
+        const pts = expandPoints([
+          { x: xr.start / scale, y: yr.start / scale },
+          { x: xr.end / scale, y: yr.start / scale },
+          { x: xr.end / scale, y: yr.end / scale },
+          { x: xr.start / scale, y: yr.end / scale }
+        ], imageW, imageH, 0.004);
+
+        const boxRatio = (bw * bh) / (w * h);
+        const score = 0.30 * a4RatioScore(pts) + 0.30 * rectangleScore(pts) + 0.25 * centerBiasScore(pts) + 0.15 * Math.min(1.3, boxRatio * 2.2);
+
+        candidates.push({ label: "밝은 박스 투영", score, points: pts });
+      }
+    }
+
+    return candidates;
+  }
+
+  function detectByTableAndRectangleLines() {
+    if (!window.cvReady) return [];
+
+    const maxSide = 1200;
+    const scale = Math.min(maxSide / imageW, maxSide / imageH, 1);
+    const w = Math.round(imageW * scale);
+    const h = Math.round(imageH * scale);
+
+    const temp = document.createElement("canvas");
+    temp.width = w;
+    temp.height = h;
+
+    const tctx = temp.getContext("2d", { willReadFrequently: true });
+    tctx.drawImage(img, 0, 0, w, h);
+
+    let src = cv.imread(temp);
+    let gray = new cv.Mat();
+    let blur = new cv.Mat();
+    let edges = new cv.Mat();
+    let closed = new cv.Mat();
+    let kernelClose = cv.Mat.ones(9, 9, cv.CV_8U);
+    let contours = new cv.MatVector();
+    let hierarchy = new cv.Mat();
+
+    const candidates = [];
+
+    try {
+      cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+      cv.GaussianBlur(gray, blur, new cv.Size(3, 3), 0);
+      cv.Canny(blur, edges, 25, 100);
+      cv.morphologyEx(edges, closed, cv.MORPH_CLOSE, kernelClose);
+
+      cv.findContours(closed, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+
+      const imageArea = w * h;
+
+      for (let i = 0; i < contours.size(); i++) {
+        const cnt = contours.get(i);
+        const area = cv.contourArea(cnt);
+
+        if (area < imageArea * 0.015 || area > imageArea * 0.99) {
+          cnt.delete();
+          continue;
+        }
+
+        const rect = cv.boundingRect(cnt);
+        const bw = rect.width;
+        const bh = rect.height;
+        const boxArea = bw * bh;
+
+        if (bw < w * 0.16 || bh < h * 0.12) {
+          cnt.delete();
+          continue;
+        }
+
+        const extent = area / Math.max(1, boxArea);
+        const pts = expandPoints([
+          { x: rect.x / scale, y: rect.y / scale },
+          { x: (rect.x + rect.width) / scale, y: rect.y / scale },
+          { x: (rect.x + rect.width) / scale, y: (rect.y + rect.height) / scale },
+          { x: rect.x / scale, y: (rect.y + rect.height) / scale }
+        ], imageW, imageH, 0.006);
+
+        const boxRatio = boxArea / imageArea;
+        const lineScore = estimateGridLineScore(temp, rect);
+        const score =
+          0.25 * rectangleScore(pts) +
+          0.24 * centerBiasScore(pts) +
+          0.22 * Math.min(1.4, boxRatio * 2.1) +
+          0.18 * Math.min(1.4, lineScore) +
+          0.11 * Math.min(1.2, extent * 1.8);
+
+        candidates.push({ label: "표/사각형 박스", score, points: pts });
+
+        cnt.delete();
+      }
+    } finally {
+      src.delete();
+      gray.delete();
+      blur.delete();
+      edges.delete();
+      closed.delete();
+      kernelClose.delete();
+      contours.delete();
+      hierarchy.delete();
+    }
+
+    return candidates;
+  }
+
+  function estimateGridLineScore(canvasEl, rect) {
+    const ctx2 = canvasEl.getContext("2d", { willReadFrequently: true });
+    const w = canvasEl.width;
+    const h = canvasEl.height;
+    const data = ctx2.getImageData(0, 0, w, h).data;
+
+    const x0 = Math.max(0, rect.x);
+    const y0 = Math.max(0, rect.y);
+    const x1 = Math.min(w - 1, rect.x + rect.width);
+    const y1 = Math.min(h - 1, rect.y + rect.height);
+
+    const sampleRows = 24;
+    const sampleCols = 24;
+    let verticalTransitions = 0;
+    let horizontalTransitions = 0;
+
+    for (let s = 0; s < sampleRows; s++) {
+      const y = Math.round(y0 + (y1 - y0) * (s + 0.5) / sampleRows);
+      let prev = null;
+      for (let x = x0; x <= x1; x += 3) {
+        const i = (y * w + x) * 4;
+        const v = (data[i] + data[i + 1] + data[i + 2]) / 3;
+        const dark = v < 155;
+        if (prev !== null && prev !== dark) verticalTransitions++;
+        prev = dark;
+      }
+    }
+
+    for (let s = 0; s < sampleCols; s++) {
+      const x = Math.round(x0 + (x1 - x0) * (s + 0.5) / sampleCols);
+      let prev = null;
+      for (let y = y0; y <= y1; y += 3) {
+        const i = (y * w + x) * 4;
+        const v = (data[i] + data[i + 1] + data[i + 2]) / 3;
+        const dark = v < 155;
+        if (prev !== null && prev !== dark) horizontalTransitions++;
+        prev = dark;
+      }
+    }
+
+    return Math.min(1.5, (verticalTransitions + horizontalTransitions) / 900);
+  }
+
+  function detectByOuterEdges() {
+    if (!window.cvReady) return [];
+
+    const maxSide = 1100;
+    const scale = Math.min(maxSide / imageW, maxSide / imageH, 1);
+    const w = Math.round(imageW * scale);
+    const h = Math.round(imageH * scale);
+
+    const temp = document.createElement("canvas");
+    temp.width = w;
+    temp.height = h;
+
+    const tctx = temp.getContext("2d", { willReadFrequently: true });
+    tctx.drawImage(img, 0, 0, w, h);
+
+    let src = cv.imread(temp);
+    let gray = new cv.Mat();
+    let blur = new cv.Mat();
+    let edges = new cv.Mat();
+    let kernel = cv.Mat.ones(7, 7, cv.CV_8U);
+    let contours = new cv.MatVector();
+    let hierarchy = new cv.Mat();
+
+    const candidates = [];
+
+    try {
+      cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+      cv.GaussianBlur(gray, blur, new cv.Size(7, 7), 0);
+      cv.Canny(blur, edges, 35, 115);
+      cv.dilate(edges, edges, kernel);
+      cv.erode(edges, edges, kernel);
+
+      cv.findContours(edges, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+
+      const imageArea = w * h;
+
+      for (let i = 0; i < contours.size(); i++) {
+        const cnt = contours.get(i);
+        const area = cv.contourArea(cnt);
+
+        if (area < imageArea * 0.06 || area > imageArea * 0.99) {
+          cnt.delete();
+          continue;
+        }
+
+        const peri = cv.arcLength(cnt, true);
+
+        for (const eps of [0.012, 0.018, 0.025, 0.035, 0.05, 0.07]) {
+          const approx = new cv.Mat();
+          cv.approxPolyDP(cnt, approx, eps * peri, true);
+
+          if (approx.rows === 4) {
+            const pts = matToPoints(approx).map(p => ({ x: p.x / scale, y: p.y / scale }));
+            const q = expandPoints(orderPoints(pts), imageW, imageH, 0.006);
+
+            const areaScore = Math.min(1.4, quadArea(q) / (imageW * imageH) * 2.0);
+            const ratioScore = a4RatioScore(q);
+            const rectScore = rectangleScore(q);
+            const centerScore = centerBiasScore(q);
+            const score = areaScore * 0.32 + ratioScore * 0.25 + rectScore * 0.25 + centerScore * 0.18;
+
+            candidates.push({ label: `외곽선 ${eps}`, score, points: q });
+          }
+
+          approx.delete();
+        }
+
+        cnt.delete();
+      }
+    } finally {
+      src.delete();
+      gray.delete();
+      blur.delete();
+      edges.delete();
+      kernel.delete();
+      contours.delete();
+      hierarchy.delete();
+    }
+
+    return candidates;
+  }
+
+  function makeCenterCropCandidates() {
+    const candidates = [];
+    const specs = [
+      { label: "중앙 넓은 사각", w: 0.90, h: 0.72, score: 0.16 },
+      { label: "중앙 표 영역", w: 0.86, h: 0.58, score: 0.14 },
+      { label: "중앙 A4 가로", w: 0.84, h: 0.59, score: 0.12 },
+      { label: "중앙 A4 세로", w: 0.58, h: 0.82, score: 0.10 }
+    ];
+
+    for (const s of specs) {
+      const bw = imageW * s.w;
+      const bh = imageH * s.h;
+      const left = (imageW - bw) / 2;
+      const top = (imageH - bh) / 2;
+
+      candidates.push({
+        label: s.label,
+        score: s.score,
+        points: [
+          { x: left, y: top },
+          { x: left + bw, y: top },
+          { x: left + bw, y: top + bh },
+          { x: left, y: top + bh }
+        ]
+      });
     }
 
     return candidates;
@@ -1449,7 +1773,7 @@
           }
         }
 
-        if (count > w * h * 0.012) comps.push({ minX, minY, maxX, maxY, count });
+        if (count > w * h * 0.010) comps.push({ minX, minY, maxX, maxY, count });
       }
     }
 
@@ -1457,85 +1781,45 @@
     return comps.slice(0, maxComponents);
   }
 
-  function detectByOuterEdges() {
-    if (!window.cvReady) return [];
+  function getRangesFromProjection(arr, threshold, totalLen) {
+    const ranges = [];
+    let inRange = false;
+    let start = 0;
 
-    const maxSide = 1100;
-    const scale = Math.min(maxSide / imageW, maxSide / imageH, 1);
-    const w = Math.round(imageW * scale);
-    const h = Math.round(imageH * scale);
-
-    const temp = document.createElement("canvas");
-    temp.width = w;
-    temp.height = h;
-
-    const tctx = temp.getContext("2d", { willReadFrequently: true });
-    tctx.drawImage(img, 0, 0, w, h);
-
-    let src = cv.imread(temp);
-    let gray = new cv.Mat();
-    let blur = new cv.Mat();
-    let edges = new cv.Mat();
-    let kernel = cv.Mat.ones(7, 7, cv.CV_8U);
-    let contours = new cv.MatVector();
-    let hierarchy = new cv.Mat();
-
-    const candidates = [];
-
-    try {
-      cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
-      cv.GaussianBlur(gray, blur, new cv.Size(7, 7), 0);
-      cv.Canny(blur, edges, 35, 115);
-      cv.dilate(edges, edges, kernel);
-      cv.erode(edges, edges, kernel);
-
-      cv.findContours(edges, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
-
-      const imageArea = w * h;
-
-      for (let i = 0; i < contours.size(); i++) {
-        const cnt = contours.get(i);
-        const area = cv.contourArea(cnt);
-
-        if (area < imageArea * 0.08 || area > imageArea * 0.985) {
-          cnt.delete();
-          continue;
-        }
-
-        const peri = cv.arcLength(cnt, true);
-
-        for (const eps of [0.012, 0.018, 0.025, 0.035, 0.05, 0.07]) {
-          const approx = new cv.Mat();
-          cv.approxPolyDP(cnt, approx, eps * peri, true);
-
-          if (approx.rows === 4) {
-            const pts = matToPoints(approx).map(p => ({ x: p.x / scale, y: p.y / scale }));
-            const q = expandPoints(orderPoints(pts), imageW, imageH, 0.006);
-
-            const areaScore = Math.min(1.4, quadArea(q) / (imageW * imageH) * 2.0);
-            const ratioScore = a4RatioScore(q);
-            const centerScore = centerBiasScore(q);
-            const score = areaScore * 0.45 + ratioScore * 0.35 + centerScore * 0.20;
-
-            candidates.push({ label: `외곽선 ${eps}`, score, points: q });
-          }
-
-          approx.delete();
-        }
-
-        cnt.delete();
+    for (let i = 0; i < arr.length; i++) {
+      if (!inRange && arr[i] > threshold) {
+        start = i;
+        inRange = true;
+      } else if (inRange && arr[i] <= threshold) {
+        if (i - start > totalLen * 0.10) ranges.push({ start, end: i });
+        inRange = false;
       }
-    } finally {
-      src.delete();
-      gray.delete();
-      blur.delete();
-      edges.delete();
-      kernel.delete();
-      contours.delete();
-      hierarchy.delete();
     }
 
-    return candidates;
+    if (inRange && arr.length - start > totalLen * 0.10) {
+      ranges.push({ start, end: arr.length - 1 });
+    }
+
+    ranges.sort((a, b) => (b.end - b.start) - (a.end - a.start));
+    return ranges.slice(0, 5);
+  }
+
+  function smoothArray(arr, radius) {
+    const copy = arr.slice();
+
+    for (let i = 0; i < arr.length; i++) {
+      let sum = 0;
+      let count = 0;
+
+      for (let j = -radius; j <= radius; j++) {
+        const idx = i + j;
+        if (idx < 0 || idx >= arr.length) continue;
+        sum += copy[idx];
+        count++;
+      }
+
+      arr[i] = sum / Math.max(1, count);
+    }
   }
 
   function dedupeCandidates(candidates) {
@@ -1544,7 +1828,7 @@
     for (const cand of candidates) {
       const q = orderPoints(cand.points);
       const area = quadArea(q);
-      if (area < imageW * imageH * 0.04) continue;
+      if (area < imageW * imageH * 0.035) continue;
 
       let duplicate = false;
 
@@ -1586,15 +1870,15 @@
   function isValidQuad(pts) {
     const q = orderPoints(pts);
     const area = quadArea(q);
-    if (area < imageW * imageH * 0.04) return false;
-    if (area > imageW * imageH * 0.985) return false;
+    if (area < imageW * imageH * 0.035) return false;
+    if (area > imageW * imageH * 0.992) return false;
 
     const w1 = dist(q[0], q[1]);
     const w2 = dist(q[3], q[2]);
     const h1 = dist(q[0], q[3]);
     const h2 = dist(q[1], q[2]);
 
-    if (Math.min(w1, w2, h1, h2) < Math.max(imageW, imageH) * 0.06) return false;
+    if (Math.min(w1, w2, h1, h2) < Math.max(imageW, imageH) * 0.05) return false;
     return true;
   }
 
@@ -1608,6 +1892,40 @@
     return Math.abs(area) / 2;
   }
 
+  function rectangleScore(pts) {
+    const q = orderPoints(pts);
+    const top = dist(q[0], q[1]);
+    const right = dist(q[1], q[2]);
+    const bottom = dist(q[2], q[3]);
+    const left = dist(q[3], q[0]);
+
+    const widthConsistency = 1 - Math.min(1, Math.abs(top - bottom) / Math.max(top, bottom, 1));
+    const heightConsistency = 1 - Math.min(1, Math.abs(left - right) / Math.max(left, right, 1));
+
+    const angles = [];
+    for (let i = 0; i < 4; i++) {
+      const a = q[(i + 3) % 4];
+      const b = q[i];
+      const c = q[(i + 1) % 4];
+      angles.push(rightAngleScore(a, b, c));
+    }
+
+    const angleScore = angles.reduce((s, v) => s + v, 0) / 4;
+    return 0.35 * widthConsistency + 0.35 * heightConsistency + 0.30 * angleScore;
+  }
+
+  function rightAngleScore(a, b, c) {
+    const v1x = a.x - b.x;
+    const v1y = a.y - b.y;
+    const v2x = c.x - b.x;
+    const v2y = c.y - b.y;
+    const dot = v1x * v2x + v1y * v2y;
+    const l1 = Math.hypot(v1x, v1y);
+    const l2 = Math.hypot(v2x, v2y);
+    const cos = Math.abs(dot / Math.max(1, l1 * l2));
+    return 1 - Math.min(1, cos);
+  }
+
   function a4RatioScore(pts) {
     const q = orderPoints(pts);
     const w1 = dist(q[0], q[1]);
@@ -1618,14 +1936,23 @@
     const ww = Math.max(1, (w1 + w2) / 2);
     const hh = Math.max(1, (h1 + h2) / 2);
     const ratio = Math.max(hh / ww, ww / hh);
-    const target = 1.414;
-    const diff = Math.abs(ratio - target);
 
-    if (diff < 0.18) return 1.45;
-    if (diff < 0.32) return 1.22;
-    if (diff < 0.50) return 1.0;
-    if (diff < 0.80) return 0.72;
-    return 0.45;
+    // A4뿐 아니라 엑셀/모니터 표처럼 넓은 사각형도 살림.
+    const targets = [1.414, 1.6, 1.78, 2.0, 2.35];
+    let best = 0.45;
+
+    for (const target of targets) {
+      const diff = Math.abs(ratio - target);
+      let score;
+      if (diff < 0.16) score = 1.45;
+      else if (diff < 0.30) score = 1.22;
+      else if (diff < 0.50) score = 1.0;
+      else if (diff < 0.80) score = 0.72;
+      else score = 0.45;
+      best = Math.max(best, score);
+    }
+
+    return best;
   }
 
   function centerBiasScore(pts) {
@@ -1636,7 +1963,7 @@
     const dx = Math.abs(cx - imageW / 2) / imageW;
     const dy = Math.abs(cy - imageH / 2) / imageH;
 
-    return Math.max(0.55, 1.18 - (dx + dy) * 1.2);
+    return Math.max(0.55, 1.18 - (dx + dy) * 1.15);
   }
 
   function expandPoints(pts, maxW, maxH, ratio) {
