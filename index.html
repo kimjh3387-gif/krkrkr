@@ -54,7 +54,7 @@
 
     .optionbar {
       top: 0;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: 1fr 1fr 1fr;
       padding-top: 0;
     }
 
@@ -333,7 +333,7 @@
 <body>
 <header>
   <h1>개인용 이미지 스캐너</h1>
-  <div class="sub">여러 장 선택 → 자동보정 → 검수 → JPG 한번에 저장/공유</div>
+  <div class="sub">여러 장 선택 → 문서 외곽 자동탐지 → 검수 → JPG 저장/공유</div>
 </header>
 
 <div class="toolbar" id="mainToolbar">
@@ -344,18 +344,7 @@
 </div>
 
 <div class="optionbar" id="optionbar">
-
-  <select id="filterMode">
-    <option value="auto" selected>보정필터: 자동보정</option>
-    <option value="vflat">보정필터: VFlat형 툴/표</option>
-    <option value="camscanner">보정필터: CamScanner형 문서</option>
-    <option value="original">보정필터: 원본</option>
-    <option value="bright">보정필터: 밝게</option>
-    <option value="gray">보정필터: 흑백</option>
-    <option value="deepgray">보정필터: 흑백 심화</option>
-    <option value="sharp">보정필터: 선명하게</option>
-    <option value="shadow">보정필터: 그림자 제거</option>
-  </select>
+  <button id="documentModeBtn" class="primary" disabled>자동영역: 문서</button>
 
   <select id="sizeMode">
     <option value="high">고용량: 고화질 3000px / JPG 92%</option>
@@ -363,18 +352,11 @@
     <option value="low">저용량: 카톡용 1200px / JPG 70%</option>
   </select>
 
-  <select id="detectMode">
-    <option value="smart" selected>자동영역: 스캐너식</option>
-    <option value="vflat">자동영역: VFlat형 툴/화면</option>
-    <option value="camscanner">자동영역: CamScanner형 문서</option>
-    <option value="paper">자동영역: 밝은 종이</option>
-    <option value="edge">자동영역: 사각형/표선</option>
-    <option value="a4">자동영역: 중앙 A4</option>
-  </select>
-
   <button id="cycleDetectBtn" disabled>영역 후보 변경</button>
 </div>
 <input type="hidden" id="sortMode" value="selected" />
+<input type="hidden" id="filterMode" value="document" />
+<input type="hidden" id="detectMode" value="document" />
 <button id="resortBtn" style="display:none" disabled>재정렬</button>
 
 <div class="editbar" id="editToolbar">
@@ -401,14 +383,14 @@
 <div class="review" id="reviewList">
   <div class="empty">
     사진을 여러 장 선택하면 자동으로 문서 영역을 잡고,<br>
-    JPG 완료본이 이곳에 쌓입니다.
+    문서 외곽 기준 JPG 완료본이 이곳에 쌓입니다.
   </div>
 </div>
 
 <div class="save-view" id="saveView"></div>
 
 <div class="hint">
-  보정필터나 용량을 바꾸면 현재 결과물이 다시 처리됩니다.<br>
+  용량을 바꾸면 현재 결과물이 다시 처리됩니다.<br>
   틀린 사진만 <b>수정</b>을 눌러 꼭짓점을 조정한 뒤 <b>수정</b>하세요.
 </div>
 
@@ -454,6 +436,7 @@
   const sizeMode = document.getElementById("sizeMode");
   const detectMode = document.getElementById("detectMode");
   const cycleDetectBtn = document.getElementById("cycleDetectBtn");
+  const documentModeBtn = document.getElementById("documentModeBtn");
 
   const backBtn = document.getElementById("backBtn");
   const autoBtn = document.getElementById("autoBtn");
@@ -756,6 +739,7 @@
     shareBtn.disabled = true;
     resortBtn.disabled = true;
     cycleDetectBtn.disabled = true;
+    documentModeBtn.disabled = true;
     setStatus("초기화 완료. 사진을 선택하세요.");
     showReviewMode();
   });
@@ -767,7 +751,6 @@
     setStatus(`재정렬 완료: ${sortMode.options[sortMode.selectedIndex].text}`);
   });
 
-  filterMode.addEventListener("change", reprocessAllResults);
   sizeMode.addEventListener("change", reprocessAllResults);
 
   detectMode.addEventListener("change", async () => {
@@ -908,7 +891,8 @@
     shareBtn.disabled = items.length === 0;
     resortBtn.disabled = items.length === 0;
     cycleDetectBtn.disabled = items.length === 0;
-    setStatus(`${items.length}장 처리 완료. 필요한 사진만 수정하세요.`);
+    documentModeBtn.disabled = items.length === 0;
+    setStatus(`${items.length}장 처리 완료. 문서 외곽이 맞는지 확인하세요.`);
   }
 
   function sleep(ms) {
@@ -1051,7 +1035,7 @@
       reviewList.innerHTML = `
         <div class="empty">
           사진을 여러 장 선택하면 자동으로 문서 영역을 잡고,<br>
-          JPG 완료본이 이곳에 쌓입니다.
+          문서 외곽 기준 JPG 완료본이 이곳에 쌓입니다.
         </div>
       `;
       return;
@@ -1236,52 +1220,26 @@
 
   function autoDetectDocumentPoints() {
     const candidates = getDocumentCandidates();
-    return candidates.length ? candidates[0].points : makeA4CenterPoints();
+    return candidates.length ? candidates[0].points : makeDocumentCenterFallback();
   }
 
   function getDocumentCandidates() {
-    const mode = detectMode?.value || "smart";
-
-    if (mode === "a4") {
-      return [{ label: "중앙 A4", score: 0.1, points: makeA4CenterPoints() }];
-    }
-
     const candidates = [];
 
-    if (mode === "vflat") {
-      // VFlat 모드: A4 종이가 아니라 엑셀/한글/웹툴 같은 프로그램 화면 안쪽 작업영역을 우선 탐지
-      candidates.push(...detectByExcelToolInnerArea().map(c => ({ ...c, score: c.score + 0.55 })));
-      candidates.push(...detectByTableAndRectangleLines().map(c => ({ ...c, score: c.score + 0.28 })));
-      candidates.push(...detectByBrightBoxProjection().map(c => ({ ...c, score: c.score + 0.12 })));
-      candidates.push(...makeCenterCropCandidates().map(c => ({ ...c, score: c.score + 0.05 })));
-    } else if (mode === "camscanner") {
-      candidates.push(...detectByPaperMask().map(c => ({ ...c, score: c.score + 0.28 })));
-      candidates.push(...detectByOuterEdges().map(c => ({ ...c, score: c.score + 0.18 })));
-      candidates.push({ label: "중앙 A4", score: 0.08, points: makeA4CenterPoints() });
-    } else {
-      if (mode === "smart" || mode === "paper") {
-        candidates.push(...detectByPaperMask());
-        candidates.push(...detectByBrightBoxProjection());
-      }
-
-      if (mode === "smart" || mode === "edge") {
-        candidates.push(...detectByOuterEdges());
-        candidates.push(...detectByTableAndRectangleLines());
-      }
-    }
-
-    // 정책표/엑셀 화면용 백업 후보
-    candidates.push(...makeCenterCropCandidates());
-    candidates.push({ label: "중앙 A4", score: 0.01, points: makeA4CenterPoints() });
+    // 문서 모드 핵심:
+    // 회색 작업영역 위에 떠 있는 가장 큰 흰색 슬라이드/페이지 외곽을 찾는다.
+    candidates.push(...detectWhiteSlideOnGrayWorkspace());
+    candidates.push(...detectWhitePageByProjection());
+    candidates.push({ label: "중앙 문서 후보", score: 0.02, points: makeDocumentCenterFallback() });
 
     return dedupeCandidates(candidates)
-      .filter(c => isValidQuad(c.points))
+      .filter(c => isValidDocumentQuad(c.points))
       .sort((a, b) => b.score - a.score)
-      .slice(0, 10);
+      .slice(0, 8);
   }
 
-  function detectByPaperMask() {
-    const maxSide = 820;
+  function detectWhiteSlideOnGrayWorkspace() {
+    const maxSide = 900;
     const scale = Math.min(maxSide / imageW, maxSide / imageH, 1);
     const w = Math.round(imageW * scale);
     const h = Math.round(imageH * scale);
@@ -1301,7 +1259,10 @@
     let sumSq = 0;
 
     for (let i = 0, p = 0; i < data.length; i += 4, p++) {
-      const v = Math.round(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]);
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
+      const v = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
       gray[p] = v;
       sum += v;
       sumSq += v * v;
@@ -1311,12 +1272,14 @@
     const variance = Math.max(0, sumSq / gray.length - mean * mean);
     const std = Math.sqrt(variance);
 
+    // 흰 슬라이드는 회색 작업영역보다 밝다.
+    // 모니터 촬영 밝기 차이를 감안해 여러 임계값 후보를 둔다.
     const thresholds = [
-      Math.max(82, mean + std * 0.00),
-      Math.max(96, mean + std * 0.16),
-      Math.max(112, mean + std * 0.32),
-      Math.max(128, mean + std * 0.50),
-      Math.max(144, mean + std * 0.68)
+      Math.max(110, mean + std * 0.18),
+      Math.max(120, mean + std * 0.30),
+      Math.max(132, mean + std * 0.42),
+      Math.max(145, mean + std * 0.55),
+      160
     ];
 
     const candidates = [];
@@ -1327,14 +1290,24 @@
       for (let y = 1; y < h - 1; y++) {
         for (let x = 1; x < w - 1; x++) {
           const idx = y * w + x;
-          if (gray[idx] >= th) mask[idx] = 1;
+          const i = idx * 4;
+          const r = data[i], g = data[i + 1], b = data[i + 2];
+          const v = gray[idx];
+          const colorDiff = Math.max(r, g, b) - Math.min(r, g, b);
+
+          // 순수 흰색만 찾으면 모니터 무늬 때문에 끊기므로,
+          // 밝고 색 편차가 크지 않은 넓은 면을 슬라이드 후보로 본다.
+          if (v >= th andColorOk(colorDiff, v)) {
+            mask[idx] = 1;
+          }
         }
       }
 
-      closeMask(mask, w, h, 3);
-      removeIsolatedNoise(mask, w, h);
+      // 내부 글자/표 때문에 끊긴 흰 페이지를 다시 한 덩어리로 붙임
+      closeMask(mask, w, h, 5);
+      fillSmallGaps(mask, w, h);
 
-      const comps = connectedComponents(mask, w, h, 8);
+      const comps = connectedComponents(mask, w, h, 10);
 
       for (const comp of comps) {
         const bw = comp.maxX - comp.minX + 1;
@@ -1342,34 +1315,42 @@
         const boxRatio = (bw * bh) / (w * h);
         const areaRatio = comp.count / (w * h);
 
-        if (bw < w * 0.18 || bh < h * 0.18) continue;
-        if (boxRatio > 0.985) continue;
+        if (bw < w * 0.35 || bh < h * 0.35) continue;
+        if (boxRatio > 0.96) continue;
 
-        let pts = [
+        const pts = expandDocumentBox([
           { x: comp.minX / scale, y: comp.minY / scale },
           { x: comp.maxX / scale, y: comp.minY / scale },
           { x: comp.maxX / scale, y: comp.maxY / scale },
           { x: comp.minX / scale, y: comp.maxY / scale }
-        ];
+        ], 0.002);
 
-        pts = expandPoints(pts, imageW, imageH, 0.008);
+        const score =
+          0.34 * documentRatioScore(pts) +
+          0.28 * rectangleScore(pts) +
+          0.20 * centerBiasScore(pts) +
+          0.18 * Math.min(1.45, boxRatio * 1.8) +
+          0.10 * Math.min(1.25, areaRatio / Math.max(0.001, boxRatio));
 
-        const a4 = a4RatioScore(pts);
-        const rect = rectangleScore(pts);
-        const center = centerBiasScore(pts);
-        const fill = Math.min(1.35, areaRatio / Math.max(0.001, boxRatio));
-        const sizeScore = Math.min(1.35, boxRatio * 2.4);
-        const score = 0.30 * a4 + 0.24 * rect + 0.20 * center + 0.15 * fill + 0.11 * sizeScore;
-
-        candidates.push({ label: `밝은 면적 ${Math.round(th)}`, score, points: pts });
+        candidates.push({
+          label: `흰 슬라이드 ${Math.round(th)}`,
+          score,
+          points: pts
+        });
       }
     }
 
     return candidates;
   }
 
-  function detectByBrightBoxProjection() {
-    const maxSide = 780;
+  function andColorOk(colorDiff, brightness) {
+    // 노란 안내바/빨간 대외비/파란 텍스트가 아니라, 흰 페이지 면을 찾기 위한 완화 조건.
+    if (brightness > 185) return colorDiff < 95;
+    return colorDiff < 65;
+  }
+
+  function detectWhitePageByProjection() {
+    const maxSide = 850;
     const scale = Math.min(maxSide / imageW, maxSide / imageH, 1);
     const w = Math.round(imageW * scale);
     const h = Math.round(imageH * scale);
@@ -1385,36 +1366,36 @@
     const row = new Array(h).fill(0);
     const col = new Array(w).fill(0);
 
-    let total = 0;
+    let sum = 0;
     let count = 0;
 
     for (let i = 0; i < data.length; i += 4) {
-      total += (data[i] + data[i + 1] + data[i + 2]) / 3;
+      sum += (data[i] + data[i + 1] + data[i + 2]) / 3;
       count++;
     }
 
-    const avg = total / Math.max(1, count);
-    const threshold = Math.max(95, avg + 8);
+    const avg = sum / Math.max(1, count);
+    const th = Math.max(128, avg + 12);
 
     for (let y = 0; y < h; y += 2) {
       for (let x = 0; x < w; x += 2) {
         const i = (y * w + x) * 4;
         const r = data[i], g = data[i + 1], b = data[i + 2];
         const v = (r + g + b) / 3;
-        const diff = Math.max(r, g, b) - Math.min(r, g, b);
+        const colorDiff = Math.max(r, g, b) - Math.min(r, g, b);
 
-        if (v > threshold && diff < 130) {
+        if (v > th && colorDiff < 95) {
           row[y]++;
           col[x]++;
         }
       }
     }
 
-    smoothArray(row, 7);
-    smoothArray(col, 7);
+    smoothArray(row, 13);
+    smoothArray(col, 13);
 
-    const rowRanges = getRangesFromProjection(row, w * 0.08, h);
-    const colRanges = getRangesFromProjection(col, h * 0.08, w);
+    const rowRanges = getRangesFromProjection(row, w * 0.18, h);
+    const colRanges = getRangesFromProjection(col, h * 0.18, w);
 
     const candidates = [];
 
@@ -1422,472 +1403,51 @@
       for (const xr of colRanges.slice(0, 4)) {
         const bw = xr.end - xr.start;
         const bh = yr.end - yr.start;
-        if (bw < w * 0.20 || bh < h * 0.20) continue;
+        if (bw < w * 0.35 || bh < h * 0.35) continue;
 
-        const pts = expandPoints([
+        const pts = expandDocumentBox([
           { x: xr.start / scale, y: yr.start / scale },
           { x: xr.end / scale, y: yr.start / scale },
           { x: xr.end / scale, y: yr.end / scale },
           { x: xr.start / scale, y: yr.end / scale }
-        ], imageW, imageH, 0.004);
+        ], 0.001);
 
         const boxRatio = (bw * bh) / (w * h);
-        const score = 0.30 * a4RatioScore(pts) + 0.30 * rectangleScore(pts) + 0.25 * centerBiasScore(pts) + 0.15 * Math.min(1.3, boxRatio * 2.2);
-
-        candidates.push({ label: "밝은 박스 투영", score, points: pts });
-      }
-    }
-
-    return candidates;
-  }
-
-  function detectByExcelToolInnerArea() {
-    // 엑셀/한글/웹툴 화면용.
-    // 목표: 사진 안의 모니터/프로그램 창 중에서 리본, 표, 메뉴가 포함된 "툴 안쪽 작업영역" 외곽을 잡는다.
-    // A4 비율보다 넓은 화면형 사각형과 표선 밀도를 더 높게 평가한다.
-    const maxSide = 900;
-    const scale = Math.min(maxSide / imageW, maxSide / imageH, 1);
-    const w = Math.round(imageW * scale);
-    const h = Math.round(imageH * scale);
-
-    const temp = document.createElement("canvas");
-    temp.width = w;
-    temp.height = h;
-
-    const tctx = temp.getContext("2d", { willReadFrequently: true });
-    tctx.drawImage(img, 0, 0, w, h);
-
-    const data = tctx.getImageData(0, 0, w, h).data;
-
-    const gray = new Uint8Array(w * h);
-    const workMask = new Uint8Array(w * h);
-    const lineMask = new Uint8Array(w * h);
-
-    let sum = 0;
-
-    for (let i = 0, p = 0; i < data.length; i += 4, p++) {
-      const r = data[i];
-      const g = data[i + 1];
-      const b = data[i + 2];
-      const v = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
-      const colorDiff = Math.max(r, g, b) - Math.min(r, g, b);
-
-      gray[p] = v;
-      sum += v;
-
-      // 엑셀/툴 내부는 대체로 검은 배경보다 밝고, 모니터 색 편차가 과하지 않음
-      if (v > 72 && colorDiff < 145) {
-        workMask[p] = 1;
-      }
-    }
-
-    const avg = sum / Math.max(1, gray.length);
-
-    // 표선/텍스트 밀도 추정: 어두운 선, 격자, 문자 영역
-    for (let y = 1; y < h - 1; y++) {
-      for (let x = 1; x < w - 1; x++) {
-        const idx = y * w + x;
-        const v = gray[idx];
-
-        const gx = Math.abs(gray[idx + 1] - gray[idx - 1]);
-        const gy = Math.abs(gray[idx + w] - gray[idx - w]);
-
-        if ((gx + gy > 24 && v < avg + 45) || v < 118) {
-          lineMask[idx] = 1;
-        }
-      }
-    }
-
-    closeMask(workMask, w, h, 2);
-
-    const rowWork = new Array(h).fill(0);
-    const colWork = new Array(w).fill(0);
-    const rowLine = new Array(h).fill(0);
-    const colLine = new Array(w).fill(0);
-
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        const idx = y * w + x;
-
-        if (workMask[idx]) {
-          rowWork[y]++;
-          colWork[x]++;
-        }
-
-        if (lineMask[idx]) {
-          rowLine[y]++;
-          colLine[x]++;
-        }
-      }
-    }
-
-    smoothArray(rowWork, 9);
-    smoothArray(colWork, 9);
-    smoothArray(rowLine, 7);
-    smoothArray(colLine, 7);
-
-    const candidates = [];
-
-    // 1) 밝은 툴 내부 전체 범위
-    const workRows = getRangesFromProjection(rowWork, w * 0.34, h);
-    const workCols = getRangesFromProjection(colWork, h * 0.34, w);
-
-    for (const yr of workRows.slice(0, 3)) {
-      for (const xr of workCols.slice(0, 3)) {
-        addToolCandidate(candidates, xr.start, yr.start, xr.end, yr.end, scale, "툴 내부 밝은 영역", 0.26);
-      }
-    }
-
-    // 2) 표/셀/문자 밀도가 높은 작업영역
-    const lineRows = getRangesFromProjection(rowLine, w * 0.045, h);
-    const lineCols = getRangesFromProjection(colLine, h * 0.045, w);
-
-    for (const yr of lineRows.slice(0, 4)) {
-      for (const xr of lineCols.slice(0, 4)) {
-        const padX = Math.round((xr.end - xr.start) * 0.04);
-        const padY = Math.round((yr.end - yr.start) * 0.06);
-
-        addToolCandidate(
-          candidates,
-          Math.max(0, xr.start - padX),
-          Math.max(0, yr.start - padY),
-          Math.min(w - 1, xr.end + padX),
-          Math.min(h - 1, yr.end + padY),
-          scale,
-          "툴 내부 표/셀 영역",
-          0.34
-        );
-      }
-    }
-
-    // 3) 컴포넌트 기반: 사진의 어두운 배경을 제외한 가장 큰 화면/툴 덩어리
-    const comps = connectedComponents(workMask, w, h, 8);
-
-    for (const comp of comps) {
-      addToolCandidate(
-        candidates,
-        comp.minX,
-        comp.minY,
-        comp.maxX,
-        comp.maxY,
-        scale,
-        "툴/화면 컴포넌트",
-        0.22
-      );
-    }
-
-    return candidates;
-  }
-
-  function addToolCandidate(candidates, x0, y0, x1, y1, scale, label, baseScore) {
-    const bw = x1 - x0;
-    const bh = y1 - y0;
-
-    if (bw <= 0 || bh <= 0) return;
-
-    const boxRatio = (bw * bh) / ((imageW * scale) * (imageH * scale));
-
-    // 엑셀/툴 화면은 보통 넓은 사각형이므로 너무 좁은 후보는 버림
-    if (boxRatio < 0.10 || boxRatio > 0.985) return;
-
-    let pts = [
-      { x: x0 / scale, y: y0 / scale },
-      { x: x1 / scale, y: y0 / scale },
-      { x: x1 / scale, y: y1 / scale },
-      { x: x0 / scale, y: y1 / scale }
-    ];
-
-    pts = expandPoints(pts, imageW, imageH, 0.006);
-
-    const wideScore = wideToolRatioScore(pts);
-    const rectScore = rectangleScore(pts);
-    const centerScore = centerBiasScore(pts);
-    const sizeScore = Math.min(1.45, boxRatio * 2.35);
-
-    const score =
-      baseScore +
-      0.34 * wideScore +
-      0.28 * rectScore +
-      0.20 * centerScore +
-      0.18 * sizeScore;
-
-    candidates.push({ label, score, points: pts });
-  }
-
-  function wideToolRatioScore(pts) {
-    const q = orderPoints(pts);
-    const w1 = dist(q[0], q[1]);
-    const w2 = dist(q[3], q[2]);
-    const h1 = dist(q[0], q[3]);
-    const h2 = dist(q[1], q[2]);
-
-    const ww = Math.max(1, (w1 + w2) / 2);
-    const hh = Math.max(1, (h1 + h2) / 2);
-    const ratio = ww / hh;
-
-    // 엑셀/프로그램 화면형은 가로로 긴 사각형을 우선
-    const targets = [1.25, 1.45, 1.60, 1.78, 2.0, 2.35];
-
-    let best = 0.45;
-
-    for (const target of targets) {
-      const diff = Math.abs(ratio - target);
-      let score;
-      if (diff < 0.14) score = 1.45;
-      else if (diff < 0.28) score = 1.20;
-      else if (diff < 0.48) score = 0.95;
-      else if (diff < 0.75) score = 0.70;
-      else score = 0.45;
-
-      best = Math.max(best, score);
-    }
-
-    return best;
-  }
-
-  function detectByTableAndRectangleLines() {
-    if (!window.cvReady) return [];
-
-    const maxSide = 1200;
-    const scale = Math.min(maxSide / imageW, maxSide / imageH, 1);
-    const w = Math.round(imageW * scale);
-    const h = Math.round(imageH * scale);
-
-    const temp = document.createElement("canvas");
-    temp.width = w;
-    temp.height = h;
-
-    const tctx = temp.getContext("2d", { willReadFrequently: true });
-    tctx.drawImage(img, 0, 0, w, h);
-
-    let src = cv.imread(temp);
-    let gray = new cv.Mat();
-    let blur = new cv.Mat();
-    let edges = new cv.Mat();
-    let closed = new cv.Mat();
-    let kernelClose = cv.Mat.ones(9, 9, cv.CV_8U);
-    let contours = new cv.MatVector();
-    let hierarchy = new cv.Mat();
-
-    const candidates = [];
-
-    try {
-      cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
-      cv.GaussianBlur(gray, blur, new cv.Size(3, 3), 0);
-      cv.Canny(blur, edges, 25, 100);
-      cv.morphologyEx(edges, closed, cv.MORPH_CLOSE, kernelClose);
-
-      cv.findContours(closed, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
-
-      const imageArea = w * h;
-
-      for (let i = 0; i < contours.size(); i++) {
-        const cnt = contours.get(i);
-        const area = cv.contourArea(cnt);
-
-        if (area < imageArea * 0.015 || area > imageArea * 0.99) {
-          cnt.delete();
-          continue;
-        }
-
-        const rect = cv.boundingRect(cnt);
-        const bw = rect.width;
-        const bh = rect.height;
-        const boxArea = bw * bh;
-
-        if (bw < w * 0.16 || bh < h * 0.12) {
-          cnt.delete();
-          continue;
-        }
-
-        const extent = area / Math.max(1, boxArea);
-        const pts = expandPoints([
-          { x: rect.x / scale, y: rect.y / scale },
-          { x: (rect.x + rect.width) / scale, y: rect.y / scale },
-          { x: (rect.x + rect.width) / scale, y: (rect.y + rect.height) / scale },
-          { x: rect.x / scale, y: (rect.y + rect.height) / scale }
-        ], imageW, imageH, 0.006);
-
-        const boxRatio = boxArea / imageArea;
-        const lineScore = estimateGridLineScore(temp, rect);
         const score =
-          0.25 * rectangleScore(pts) +
-          0.24 * centerBiasScore(pts) +
-          0.22 * Math.min(1.4, boxRatio * 2.1) +
-          0.18 * Math.min(1.4, lineScore) +
-          0.11 * Math.min(1.2, extent * 1.8);
+          0.34 * documentRatioScore(pts) +
+          0.26 * rectangleScore(pts) +
+          0.22 * centerBiasScore(pts) +
+          0.18 * Math.min(1.45, boxRatio * 1.8);
 
-        candidates.push({ label: "표/사각형 박스", score, points: pts });
-
-        cnt.delete();
+        candidates.push({
+          label: "흰 페이지 투영",
+          score,
+          points: pts
+        });
       }
-    } finally {
-      src.delete();
-      gray.delete();
-      blur.delete();
-      edges.delete();
-      closed.delete();
-      kernelClose.delete();
-      contours.delete();
-      hierarchy.delete();
     }
 
     return candidates;
   }
 
-  function estimateGridLineScore(canvasEl, rect) {
-    const ctx2 = canvasEl.getContext("2d", { willReadFrequently: true });
-    const w = canvasEl.width;
-    const h = canvasEl.height;
-    const data = ctx2.getImageData(0, 0, w, h).data;
+  function fillSmallGaps(mask, w, h) {
+    const copy = mask.slice();
 
-    const x0 = Math.max(0, rect.x);
-    const y0 = Math.max(0, rect.y);
-    const x1 = Math.min(w - 1, rect.x + rect.width);
-    const y1 = Math.min(h - 1, rect.y + rect.height);
+    for (let y = 3; y < h - 3; y++) {
+      for (let x = 3; x < w - 3; x++) {
+        const idx = y * w + x;
+        if (copy[idx]) continue;
 
-    const sampleRows = 24;
-    const sampleCols = 24;
-    let verticalTransitions = 0;
-    let horizontalTransitions = 0;
-
-    for (let s = 0; s < sampleRows; s++) {
-      const y = Math.round(y0 + (y1 - y0) * (s + 0.5) / sampleRows);
-      let prev = null;
-      for (let x = x0; x <= x1; x += 3) {
-        const i = (y * w + x) * 4;
-        const v = (data[i] + data[i + 1] + data[i + 2]) / 3;
-        const dark = v < 155;
-        if (prev !== null && prev !== dark) verticalTransitions++;
-        prev = dark;
-      }
-    }
-
-    for (let s = 0; s < sampleCols; s++) {
-      const x = Math.round(x0 + (x1 - x0) * (s + 0.5) / sampleCols);
-      let prev = null;
-      for (let y = y0; y <= y1; y += 3) {
-        const i = (y * w + x) * 4;
-        const v = (data[i] + data[i + 1] + data[i + 2]) / 3;
-        const dark = v < 155;
-        if (prev !== null && prev !== dark) horizontalTransitions++;
-        prev = dark;
-      }
-    }
-
-    return Math.min(1.5, (verticalTransitions + horizontalTransitions) / 900);
-  }
-
-  function detectByOuterEdges() {
-    if (!window.cvReady) return [];
-
-    const maxSide = 1100;
-    const scale = Math.min(maxSide / imageW, maxSide / imageH, 1);
-    const w = Math.round(imageW * scale);
-    const h = Math.round(imageH * scale);
-
-    const temp = document.createElement("canvas");
-    temp.width = w;
-    temp.height = h;
-
-    const tctx = temp.getContext("2d", { willReadFrequently: true });
-    tctx.drawImage(img, 0, 0, w, h);
-
-    let src = cv.imread(temp);
-    let gray = new cv.Mat();
-    let blur = new cv.Mat();
-    let edges = new cv.Mat();
-    let kernel = cv.Mat.ones(7, 7, cv.CV_8U);
-    let contours = new cv.MatVector();
-    let hierarchy = new cv.Mat();
-
-    const candidates = [];
-
-    try {
-      cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
-      cv.GaussianBlur(gray, blur, new cv.Size(7, 7), 0);
-      cv.Canny(blur, edges, 35, 115);
-      cv.dilate(edges, edges, kernel);
-      cv.erode(edges, edges, kernel);
-
-      cv.findContours(edges, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
-
-      const imageArea = w * h;
-
-      for (let i = 0; i < contours.size(); i++) {
-        const cnt = contours.get(i);
-        const area = cv.contourArea(cnt);
-
-        if (area < imageArea * 0.06 || area > imageArea * 0.99) {
-          cnt.delete();
-          continue;
-        }
-
-        const peri = cv.arcLength(cnt, true);
-
-        for (const eps of [0.012, 0.018, 0.025, 0.035, 0.05, 0.07]) {
-          const approx = new cv.Mat();
-          cv.approxPolyDP(cnt, approx, eps * peri, true);
-
-          if (approx.rows === 4) {
-            const pts = matToPoints(approx).map(p => ({ x: p.x / scale, y: p.y / scale }));
-            const q = expandPoints(orderPoints(pts), imageW, imageH, 0.006);
-
-            const areaScore = Math.min(1.4, quadArea(q) / (imageW * imageH) * 2.0);
-            const ratioScore = a4RatioScore(q);
-            const rectScore = rectangleScore(q);
-            const centerScore = centerBiasScore(q);
-            const score = areaScore * 0.32 + ratioScore * 0.25 + rectScore * 0.25 + centerScore * 0.18;
-
-            candidates.push({ label: `외곽선 ${eps}`, score, points: q });
+        let count = 0;
+        for (let yy = -3; yy <= 3; yy++) {
+          for (let xx = -3; xx <= 3; xx++) {
+            count += copy[(y + yy) * w + (x + xx)];
           }
-
-          approx.delete();
         }
 
-        cnt.delete();
+        if (count >= 28) mask[idx] = 1;
       }
-    } finally {
-      src.delete();
-      gray.delete();
-      blur.delete();
-      edges.delete();
-      kernel.delete();
-      contours.delete();
-      hierarchy.delete();
     }
-
-    return candidates;
-  }
-
-  function makeCenterCropCandidates() {
-    const candidates = [];
-    const specs = [
-      { label: "중앙 넓은 사각", w: 0.90, h: 0.72, score: 0.16 },
-      { label: "중앙 표 영역", w: 0.86, h: 0.58, score: 0.14 },
-      { label: "중앙 A4 가로", w: 0.84, h: 0.59, score: 0.12 },
-      { label: "중앙 A4 세로", w: 0.58, h: 0.82, score: 0.10 }
-    ];
-
-    for (const s of specs) {
-      const bw = imageW * s.w;
-      const bh = imageH * s.h;
-      const left = (imageW - bw) / 2;
-      const top = (imageH - bh) / 2;
-
-      candidates.push({
-        label: s.label,
-        score: s.score,
-        points: [
-          { x: left, y: top },
-          { x: left + bw, y: top },
-          { x: left + bw, y: top + bh },
-          { x: left, y: top + bh }
-        ]
-      });
-    }
-
-    return candidates;
   }
 
   function closeMask(mask, w, h, iterations) {
@@ -1908,7 +1468,9 @@
           copy[idx - w] || copy[idx + w] ||
           copy[idx - w - 1] || copy[idx - w + 1] ||
           copy[idx + w - 1] || copy[idx + w + 1]
-        ) mask[idx] = 1;
+        ) {
+          mask[idx] = 1;
+        }
       }
     }
   }
@@ -1924,26 +1486,6 @@
         if (!copy[idx - 1] || !copy[idx + 1] || !copy[idx - w] || !copy[idx + w]) {
           mask[idx] = 0;
         }
-      }
-    }
-  }
-
-  function removeIsolatedNoise(mask, w, h) {
-    const copy = mask.slice();
-
-    for (let y = 2; y < h - 2; y++) {
-      for (let x = 2; x < w - 2; x++) {
-        const idx = y * w + x;
-        if (!copy[idx]) continue;
-
-        let count = 0;
-        for (let yy = -2; yy <= 2; yy++) {
-          for (let xx = -2; xx <= 2; xx++) {
-            count += copy[(y + yy) * w + (x + xx)];
-          }
-        }
-
-        if (count <= 5) mask[idx] = 0;
       }
     }
   }
@@ -1970,6 +1512,7 @@
           const cy = Math.floor(idx / w);
 
           count++;
+
           if (cx < minX) minX = cx;
           if (cx > maxX) maxX = cx;
           if (cy < minY) minY = cy;
@@ -1990,7 +1533,9 @@
           }
         }
 
-        if (count > w * h * 0.010) comps.push({ minX, minY, maxX, maxY, count });
+        if (count > w * h * 0.02) {
+          comps.push({ minX, minY, maxX, maxY, count });
+        }
       }
     }
 
@@ -2008,12 +1553,12 @@
         start = i;
         inRange = true;
       } else if (inRange && arr[i] <= threshold) {
-        if (i - start > totalLen * 0.10) ranges.push({ start, end: i });
+        if (i - start > totalLen * 0.15) ranges.push({ start, end: i });
         inRange = false;
       }
     }
 
-    if (inRange && arr.length - start > totalLen * 0.10) {
+    if (inRange && arr.length - start > totalLen * 0.15) {
       ranges.push({ start, end: arr.length - 1 });
     }
 
@@ -2045,7 +1590,8 @@
     for (const cand of candidates) {
       const q = orderPoints(cand.points);
       const area = quadArea(q);
-      if (area < imageW * imageH * 0.035) continue;
+
+      if (area < imageW * imageH * 0.12) continue;
 
       let duplicate = false;
 
@@ -2070,33 +1616,11 @@
     return out;
   }
 
+
   function averagePointDistance(a, b) {
     let total = 0;
     for (let i = 0; i < 4; i++) total += dist(a[i], b[i]);
     return total / 4;
-  }
-
-  function matToPoints(mat) {
-    const pts = [];
-    for (let i = 0; i < mat.rows; i++) {
-      pts.push({ x: mat.data32S[i * 2], y: mat.data32S[i * 2 + 1] });
-    }
-    return pts;
-  }
-
-  function isValidQuad(pts) {
-    const q = orderPoints(pts);
-    const area = quadArea(q);
-    if (area < imageW * imageH * 0.035) return false;
-    if (area > imageW * imageH * 0.992) return false;
-
-    const w1 = dist(q[0], q[1]);
-    const w2 = dist(q[3], q[2]);
-    const h1 = dist(q[0], q[3]);
-    const h2 = dist(q[1], q[2]);
-
-    if (Math.min(w1, w2, h1, h2) < Math.max(imageW, imageH) * 0.05) return false;
-    return true;
   }
 
   function quadArea(q) {
@@ -2107,6 +1631,23 @@
       area += p1.x * p2.y - p2.x * p1.y;
     }
     return Math.abs(area) / 2;
+  }
+
+  function isValidDocumentQuad(pts) {
+    const q = orderPoints(pts);
+    const area = quadArea(q);
+
+    if (area < imageW * imageH * 0.12) return false;
+    if (area > imageW * imageH * 0.98) return false;
+
+    const top = dist(q[0], q[1]);
+    const bottom = dist(q[3], q[2]);
+    const left = dist(q[0], q[3]);
+    const right = dist(q[1], q[2]);
+
+    if (Math.min(top, bottom, left, right) < Math.max(imageW, imageH) * 0.12) return false;
+
+    return true;
   }
 
   function rectangleScore(pts) {
@@ -2128,7 +1669,7 @@
     }
 
     const angleScore = angles.reduce((s, v) => s + v, 0) / 4;
-    return 0.35 * widthConsistency + 0.35 * heightConsistency + 0.30 * angleScore;
+    return 0.34 * widthConsistency + 0.34 * heightConsistency + 0.32 * angleScore;
   }
 
   function rightAngleScore(a, b, c) {
@@ -2143,7 +1684,7 @@
     return 1 - Math.min(1, cos);
   }
 
-  function a4RatioScore(pts) {
+  function documentRatioScore(pts) {
     const q = orderPoints(pts);
     const w1 = dist(q[0], q[1]);
     const w2 = dist(q[3], q[2]);
@@ -2152,20 +1693,24 @@
 
     const ww = Math.max(1, (w1 + w2) / 2);
     const hh = Math.max(1, (h1 + h2) / 2);
-    const ratio = Math.max(hh / ww, ww / hh);
+    const ratio = Math.max(ww / hh, hh / ww);
 
-    // A4뿐 아니라 엑셀/모니터 표처럼 넓은 사각형도 살림.
-    const targets = [1.414, 1.6, 1.78, 2.0, 2.35];
+    // PPT 슬라이드/문서 사진 모두 허용:
+    // 16:9, 4:3, A4 세로/가로에 가까운 후보를 높게 평가
+    const targets = [1.333, 1.414, 1.6, 1.777];
+
     let best = 0.45;
 
     for (const target of targets) {
       const diff = Math.abs(ratio - target);
+
       let score;
-      if (diff < 0.16) score = 1.45;
-      else if (diff < 0.30) score = 1.22;
-      else if (diff < 0.50) score = 1.0;
-      else if (diff < 0.80) score = 0.72;
+      if (diff < 0.12) score = 1.45;
+      else if (diff < 0.24) score = 1.20;
+      else if (diff < 0.42) score = 1.0;
+      else if (diff < 0.65) score = 0.72;
       else score = 0.45;
+
       best = Math.max(best, score);
     }
 
@@ -2180,53 +1725,31 @@
     const dx = Math.abs(cx - imageW / 2) / imageW;
     const dy = Math.abs(cy - imageH / 2) / imageH;
 
-    return Math.max(0.55, 1.18 - (dx + dy) * 1.15);
+    return Math.max(0.50, 1.20 - (dx + dy) * 1.15);
   }
 
-  function expandPoints(pts, maxW, maxH, ratio) {
+  function expandDocumentBox(pts, ratio) {
     const q = orderPoints(pts);
     const cx = (q[0].x + q[1].x + q[2].x + q[3].x) / 4;
     const cy = (q[0].y + q[1].y + q[2].y + q[3].y) / 4;
 
     return q.map(p => ({
-      x: clamp(p.x + (p.x - cx) * ratio, 0, maxW),
-      y: clamp(p.y + (p.y - cy) * ratio, 0, maxH)
+      x: clamp(p.x + (p.x - cx) * ratio, 0, imageW),
+      y: clamp(p.y + (p.y - cy) * ratio, 0, imageH)
     }));
   }
 
-  function makeA4CenterPoints() {
-    const imgRatio = imageH / imageW;
-    const a4Ratio = 1.41421356;
-
-    let boxW;
-    let boxH;
-
-    if (imgRatio >= 1) {
-      boxH = imageH * 0.76;
-      boxW = boxH / a4Ratio;
-      if (boxW > imageW * 0.82) {
-        boxW = imageW * 0.82;
-        boxH = boxW * a4Ratio;
-      }
-    } else {
-      boxW = imageW * 0.76;
-      boxH = boxW / a4Ratio;
-      if (boxH > imageH * 0.82) {
-        boxH = imageH * 0.82;
-        boxW = boxH * a4Ratio;
-      }
-    }
-
-    const left = (imageW - boxW) / 2;
-    const top = (imageH - boxH) / 2;
-    const right = left + boxW;
-    const bottom = top + boxH;
+  function makeDocumentCenterFallback() {
+    const bw = imageW * 0.84;
+    const bh = imageH * 0.78;
+    const left = (imageW - bw) / 2;
+    const top = (imageH - bh) / 2;
 
     return [
       { x: left, y: top },
-      { x: right, y: top },
-      { x: right, y: bottom },
-      { x: left, y: bottom }
+      { x: left + bw, y: top },
+      { x: left + bw, y: top + bh },
+      { x: left, y: top + bh }
     ];
   }
 
@@ -2264,71 +1787,28 @@
   }
 
   function applyFilterToCanvas(canvasEl, mode) {
-    if (mode === "original") return;
-
+    // 문서 필터 하나만 사용:
+    // 회색 바탕 위 흰색 슬라이드를 자른 뒤, 배경은 밝게, 글자는 또렷하게.
     const c = canvasEl.getContext("2d", { willReadFrequently: true });
     const imgData = c.getImageData(0, 0, canvasEl.width, canvasEl.height);
     const data = imgData.data;
 
-    if (mode === "vflat") {
-      applyVFlatFilter(data, canvasEl.width, canvasEl.height);
-    } else if (mode === "camscanner") {
-      applyCamScannerFilter(data, canvasEl.width, canvasEl.height);
-    } else if (mode === "bright") {
-      adjustBrightnessContrast(data, 18, 1.12);
-    } else if (mode === "gray") {
-      grayscale(data, 1.22, 8);
-    } else if (mode === "deepgray") {
-      deepBlackWhite(data);
-    } else if (mode === "sharp") {
-      adjustBrightnessContrast(data, 8, 1.18);
-      c.putImageData(imgData, 0, 0);
-      sharpenCanvas(canvasEl);
-      return;
-    } else if (mode === "shadow") {
-      normalizeShadow(data, canvasEl.width, canvasEl.height);
-    } else {
-      autoEnhance(data);
-    }
+    applyDocumentFilter(data, canvasEl.width, canvasEl.height);
 
     c.putImageData(imgData, 0, 0);
   }
 
-  function applyVFlatFilter(data, w, h) {
-    // 모니터/엑셀/정책표 박스용: 색은 많이 죽이지 않고 글자와 표선 대비를 올림.
-    for (let i = 0; i < data.length; i += 4) {
-      const r = data[i];
-      const g = data[i + 1];
-      const b = data[i + 2];
-
-      let gray = 0.299 * r + 0.587 * g + 0.114 * b;
-
-      // 모니터 촬영 특유의 회색 바탕을 밝히고 표선/글자를 살림
-      let contrast = 1.24;
-      let bright = 18;
-
-      let nr = clamp((r - 128) * contrast + 128 + bright, 0, 255);
-      let ng = clamp((g - 128) * contrast + 128 + bright, 0, 255);
-      let nb = clamp((b - 128) * contrast + 128 + bright, 0, 255);
-
-      // 과한 색 번짐 줄이기
-      data[i] = clamp(nr * 0.72 + gray * 0.28, 0, 255);
-      data[i + 1] = clamp(ng * 0.72 + gray * 0.28, 0, 255);
-      data[i + 2] = clamp(nb * 0.72 + gray * 0.28, 0, 255);
-    }
-  }
-
-  function applyCamScannerFilter(data, w, h) {
-    // 종이 문서용: 배경은 더 하얗게, 글자는 더 진하게.
+  function applyDocumentFilter(data, w, h) {
     normalizeShadow(data, w, h);
 
     for (let i = 0; i < data.length; i += 4) {
       let gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
 
-      gray = clamp((gray - 128) * 1.34 + 166, 0, 255);
+      // CamScanner 문서 느낌: 바탕은 밝게, 글자는 유지
+      gray = clamp((gray - 128) * 1.22 + 158, 0, 255);
 
-      if (gray > 215) gray = 255;
-      if (gray < 92) gray = Math.max(0, gray - 18);
+      if (gray > 225) gray = 255;
+      if (gray < 85) gray = Math.max(0, gray - 12);
 
       data[i] = data[i + 1] = data[i + 2] = gray;
     }
