@@ -265,13 +265,15 @@
       width: 60px;
       height: 60px;
       border-radius: 50%;
-      border: 2px solid rgba(255,255,255,0.95);
-      background: #000;
+      border: 2px solid rgba(255,255,255,0.75);
+      background: rgba(0,0,0,0.18);
       z-index: 999;
       display: none;
       pointer-events: none;
-      box-shadow: 0 8px 22px rgba(0,0,0,0.55);
+      box-shadow: 0 8px 22px rgba(0,0,0,0.35);
       overflow: hidden;
+      opacity: 0.72;
+      backdrop-filter: blur(1px);
     }
 
     .save-view {
@@ -342,16 +344,11 @@
 </div>
 
 <div class="optionbar" id="optionbar">
-  <select id="sortMode">
-    <option value="oldest">시간순: 오래된 사진 먼저</option>
-    <option value="newest">시간순: 최신 사진 먼저</option>
-    <option value="name">파일명순</option>
-    <option value="selected">선택한 순서</option>
-  </select>
-  <button id="resortBtn" disabled>재정렬</button>
 
   <select id="filterMode">
     <option value="auto" selected>보정필터: 자동보정</option>
+    <option value="vflat">보정필터: VFlat형 박스/표</option>
+    <option value="camscanner">보정필터: CamScanner형 문서</option>
     <option value="original">보정필터: 원본</option>
     <option value="bright">보정필터: 밝게</option>
     <option value="gray">보정필터: 흑백</option>
@@ -368,6 +365,8 @@
 
   <select id="detectMode">
     <option value="smart" selected>자동영역: 스캐너식</option>
+    <option value="vflat">자동영역: VFlat형 표/박스</option>
+    <option value="camscanner">자동영역: CamScanner형 문서</option>
     <option value="paper">자동영역: 밝은 종이</option>
     <option value="edge">자동영역: 사각형/표선</option>
     <option value="a4">자동영역: 중앙 A4</option>
@@ -375,12 +374,14 @@
 
   <button id="cycleDetectBtn" disabled>영역 후보 변경</button>
 </div>
+<input type="hidden" id="sortMode" value="selected" />
+<button id="resortBtn" style="display:none" disabled>재정렬</button>
 
 <div class="editbar" id="editToolbar">
   <button id="backBtn">검수 목록</button>
   <button id="autoBtn" class="warn">자동 영역</button>
   <button id="cycleEditBtn">후보 변경</button>
-  <button id="saveEditBtn" class="good">수정 저장</button>
+  <button id="saveEditBtn" class="good">수정</button>
 </div>
 
 <input id="fileInput" type="file" accept="image/*" multiple />
@@ -408,7 +409,7 @@
 
 <div class="hint">
   보정필터나 용량을 바꾸면 현재 결과물이 다시 처리됩니다.<br>
-  틀린 사진만 <b>수정</b>을 눌러 꼭짓점을 조정한 뒤 <b>수정 저장</b>하세요.
+  틀린 사진만 <b>수정</b>을 눌러 꼭짓점을 조정한 뒤 <b>수정</b>하세요.
 </div>
 
 <script async src="https://docs.opencv.org/4.x/opencv.js" onload="onOpenCvLoaded();"></script>
@@ -798,7 +799,7 @@
     if (editIndex < 0 || !items[editIndex]) return;
 
     await reprocessOneItem(editIndex, points);
-    setStatus(`${editIndex + 1}번 수정 저장 완료.`);
+    setStatus(`${editIndex + 1}번 수정 완료.`);
     showReviewMode();
   });
 
@@ -1247,14 +1248,24 @@
 
     const candidates = [];
 
-    if (mode === "smart" || mode === "paper") {
-      candidates.push(...detectByPaperMask());
-      candidates.push(...detectByBrightBoxProjection());
-    }
+    if (mode === "vflat") {
+      candidates.push(...detectByTableAndRectangleLines().map(c => ({ ...c, score: c.score + 0.35 })));
+      candidates.push(...detectByBrightBoxProjection().map(c => ({ ...c, score: c.score + 0.18 })));
+      candidates.push(...makeCenterCropCandidates().map(c => ({ ...c, score: c.score + 0.10 })));
+    } else if (mode === "camscanner") {
+      candidates.push(...detectByPaperMask().map(c => ({ ...c, score: c.score + 0.28 })));
+      candidates.push(...detectByOuterEdges().map(c => ({ ...c, score: c.score + 0.18 })));
+      candidates.push({ label: "중앙 A4", score: 0.08, points: makeA4CenterPoints() });
+    } else {
+      if (mode === "smart" || mode === "paper") {
+        candidates.push(...detectByPaperMask());
+        candidates.push(...detectByBrightBoxProjection());
+      }
 
-    if (mode === "smart" || mode === "edge") {
-      candidates.push(...detectByOuterEdges());
-      candidates.push(...detectByTableAndRectangleLines());
+      if (mode === "smart" || mode === "edge") {
+        candidates.push(...detectByOuterEdges());
+        candidates.push(...detectByTableAndRectangleLines());
+      }
     }
 
     // 정책표/엑셀 화면용 백업 후보
@@ -2053,7 +2064,11 @@
     const imgData = c.getImageData(0, 0, canvasEl.width, canvasEl.height);
     const data = imgData.data;
 
-    if (mode === "bright") {
+    if (mode === "vflat") {
+      applyVFlatFilter(data, canvasEl.width, canvasEl.height);
+    } else if (mode === "camscanner") {
+      applyCamScannerFilter(data, canvasEl.width, canvasEl.height);
+    } else if (mode === "bright") {
       adjustBrightnessContrast(data, 18, 1.12);
     } else if (mode === "gray") {
       grayscale(data, 1.22, 8);
@@ -2071,6 +2086,46 @@
     }
 
     c.putImageData(imgData, 0, 0);
+  }
+
+  function applyVFlatFilter(data, w, h) {
+    // 모니터/엑셀/정책표 박스용: 색은 많이 죽이지 않고 글자와 표선 대비를 올림.
+    for (let i = 0; i < data.length; i += 4) {
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
+
+      let gray = 0.299 * r + 0.587 * g + 0.114 * b;
+
+      // 모니터 촬영 특유의 회색 바탕을 밝히고 표선/글자를 살림
+      let contrast = 1.24;
+      let bright = 18;
+
+      let nr = clamp((r - 128) * contrast + 128 + bright, 0, 255);
+      let ng = clamp((g - 128) * contrast + 128 + bright, 0, 255);
+      let nb = clamp((b - 128) * contrast + 128 + bright, 0, 255);
+
+      // 과한 색 번짐 줄이기
+      data[i] = clamp(nr * 0.72 + gray * 0.28, 0, 255);
+      data[i + 1] = clamp(ng * 0.72 + gray * 0.28, 0, 255);
+      data[i + 2] = clamp(nb * 0.72 + gray * 0.28, 0, 255);
+    }
+  }
+
+  function applyCamScannerFilter(data, w, h) {
+    // 종이 문서용: 배경은 더 하얗게, 글자는 더 진하게.
+    normalizeShadow(data, w, h);
+
+    for (let i = 0; i < data.length; i += 4) {
+      let gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+
+      gray = clamp((gray - 128) * 1.34 + 166, 0, 255);
+
+      if (gray > 215) gray = 255;
+      if (gray < 92) gray = Math.max(0, gray - 18);
+
+      data[i] = data[i + 1] = data[i + 2] = gray;
+    }
   }
 
   function adjustBrightnessContrast(data, brightness, contrast) {
