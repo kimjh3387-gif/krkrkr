@@ -262,8 +262,8 @@
 
     #magnifier {
       position: fixed;
-      width: 60px;
-      height: 60px;
+      width: 90px;
+      height: 90px;
       border-radius: 50%;
       border: 2px solid rgba(255,255,255,0.75);
       background: rgba(0,0,0,0.18);
@@ -346,10 +346,10 @@
 <div class="optionbar" id="optionbar">
 
   <select id="filterMode">
-    <option value="auto" selected>보정필터: 자동보정</option>
+    <option value="auto">보정필터: 자동보정</option>
     <option value="vflat">보정필터: VFlat형 툴/표</option>
-    <option value="camscanner">보정필터: 문서</option>
-    <option value="original">보정필터: 원본</option>
+    <option value="camscanner">보정필터: CamScanner형 문서</option>
+    <option value="original" selected>보정필터: 원본</option>
     <option value="bright">보정필터: 밝게</option>
     <option value="gray">보정필터: 흑백</option>
     <option value="deepgray">보정필터: 흑백 심화</option>
@@ -366,7 +366,7 @@
   <select id="detectMode">
     <option value="smart" selected>자동영역: 스캐너식</option>
     <option value="vflat">자동영역: VFlat형 툴/화면</option>
-    <option value="camscanner">자동영역: 문서</option>
+    <option value="camscanner">자동영역: CamScanner형 문서</option>
     <option value="paper">자동영역: 밝은 종이</option>
     <option value="edge">자동영역: 사각형/표선</option>
     <option value="a4">자동영역: 중앙 A4</option>
@@ -506,8 +506,8 @@
     canvas.style.height = r.height + "px";
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    magnifier.width = 60 * dpr;
-    magnifier.height = 60 * dpr;
+    magnifier.width = 90 * dpr;
+    magnifier.height = 90 * dpr;
     magCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     if (loaded) fitView();
@@ -626,7 +626,7 @@
   }
 
   function showMagnifier(touchX, touchY, imgPoint) {
-    const size = 60;
+    const size = 90;
     const zoom = 0.45;
     const sourceSize = size / zoom;
 
@@ -1255,15 +1255,9 @@
       candidates.push(...detectByBrightBoxProjection().map(c => ({ ...c, score: c.score + 0.12 })));
       candidates.push(...makeCenterCropCandidates().map(c => ({ ...c, score: c.score + 0.05 })));
     } else if (mode === "camscanner") {
-      // 문서 모드:
-      // 회색 작업영역 위 흰색 슬라이드 외곽선 기준.
-      // 화질보정/저장 파이프라인은 건드리지 않고, 자동영역 좌표만 안정값으로 우선 적용.
-      candidates.push({ label: "문서 기본 좌표", score: 10.0, points: makeDocumentPresetPoints() });
-
-      // 기존 탐지는 보조 후보로만 유지
-      candidates.push(...detectByPaperMask().map(c => ({ ...c, score: c.score + 0.10 })));
-      candidates.push(...detectByOuterEdges().map(c => ({ ...c, score: c.score + 0.08 })));
-      candidates.push({ label: "중앙 A4", score: 0.01, points: makeA4CenterPoints() });
+      candidates.push(...detectByPaperMask().map(c => ({ ...c, score: c.score + 0.28 })));
+      candidates.push(...detectByOuterEdges().map(c => ({ ...c, score: c.score + 0.18 })));
+      candidates.push({ label: "중앙 A4", score: 0.08, points: makeA4CenterPoints() });
     } else {
       if (mode === "smart" || mode === "paper") {
         candidates.push(...detectByPaperMask());
@@ -1864,23 +1858,6 @@
     }
 
     return candidates;
-  }
-
-  function makeDocumentPresetPoints() {
-    // 샘플 10장 기준 문서 기본 좌표.
-    // 목표: 회색 배경 위 흰색 슬라이드 외곽.
-    // 좌표는 원본 이미지 크기 대비 상대값이므로 PC/아이폰 이미지 크기가 달라도 동일하게 적용됨.
-    const left = imageW * 0.055;
-    const right = imageW * 0.930;
-    const top = imageH * 0.095;
-    const bottom = imageH * 0.895;
-
-    return [
-      { x: left, y: top },
-      { x: right, y: top },
-      { x: right, y: bottom },
-      { x: left, y: bottom }
-    ];
   }
 
   function makeCenterCropCandidates() {
